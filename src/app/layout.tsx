@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { ServiceWorkerRegister } from "@/components/shared/service-worker-register";
 import { Analytics } from "@/components/shared/analytics";
+import { PWAInstallPrompt } from "@/components/shared/pwa-install-prompt";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -48,6 +49,7 @@ export default function RootLayout({
       <body className="font-sans">
         <Analytics domain="budgy.app" />
         <ServiceWorkerRegister />
+        <PWAInstallPrompt />
         {children}
       </body>
     </html>

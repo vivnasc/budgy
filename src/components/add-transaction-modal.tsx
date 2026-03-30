@@ -37,6 +37,7 @@ import {
 
 interface AddTransactionModalProps {
   onClose: () => void;
+  onSaved?: () => void;
 }
 
 type TransactionType = "income" | "expense" | "transfer";
@@ -104,7 +105,7 @@ const SUGGESTED_TAGS = [
   "Viagem",
 ];
 
-export function AddTransactionModal({ onClose }: AddTransactionModalProps) {
+export function AddTransactionModal({ onClose, onSaved }: AddTransactionModalProps) {
   const [type, setType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<Currency>("MZN");
@@ -120,6 +121,8 @@ export function AddTransactionModal({ onClose }: AddTransactionModalProps) {
   const [tags, setTags] = useState<string[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const currentCategories = CATEGORIES[type];
 
@@ -515,9 +518,49 @@ export function AddTransactionModal({ onClose }: AddTransactionModalProps) {
             </div>
           )}
 
+          {/* Error message */}
+          {saveError && (
+            <p className="text-sm text-red-500 text-center">{saveError}</p>
+          )}
+
           {/* Submit Button */}
           <button
-            className={`w-full py-3.5 rounded-xl text-white font-semibold text-sm transition-all active:scale-[0.98] shadow-lg ${
+            disabled={saving || !amount || parseFloat(amount) <= 0}
+            onClick={async () => {
+              setSaving(true);
+              setSaveError(null);
+              try {
+                const txData = {
+                  type,
+                  amount: parseFloat(amount),
+                  currency,
+                  description: description || selectedCategory || "",
+                  date: date,
+                  is_recurring: isRecurring,
+                  recurring_config: isRecurring ? { frequency: recurringFrequency } : null,
+                  tags: tags.length > 0 ? tags : null,
+                };
+
+                const response = await fetch("/api/transactions", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ transaction: txData }),
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                  onSaved?.();
+                  handleClose();
+                } else {
+                  setSaveError(data.error || "Erro ao guardar");
+                }
+              } catch {
+                setSaveError("Erro de rede. Tenta novamente.");
+              } finally {
+                setSaving(false);
+              }
+            }}
+            className={`w-full py-3.5 rounded-xl text-white font-semibold text-sm transition-all active:scale-[0.98] shadow-lg disabled:opacity-50 ${
               type === "income"
                 ? "bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 shadow-emerald-500/25"
                 : type === "transfer"
@@ -525,11 +568,13 @@ export function AddTransactionModal({ onClose }: AddTransactionModalProps) {
                   : "bg-red-500 hover:bg-red-600 active:bg-red-700 shadow-red-500/25"
             }`}
           >
-            {type === "income"
-              ? "Registar Receita"
-              : type === "transfer"
-                ? "Registar Transferência"
-                : "Registar Despesa"}
+            {saving
+              ? "A guardar..."
+              : type === "income"
+                ? "Registar Receita"
+                : type === "transfer"
+                  ? "Registar Transferência"
+                  : "Registar Despesa"}
           </button>
         </div>
       </div>

@@ -715,6 +715,41 @@ function ImportPreview({
   detectedFormat?: string | null;
   onBack: () => void;
 }) {
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleSaveToDatabase = async () => {
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const transactions = result.imported.map((tx) => ({
+        type: tx.type,
+        amount: tx.amount,
+        currency: "MZN",
+        date: tx.date,
+        description: tx.description,
+      }));
+
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactions }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setSaved(true);
+      } else {
+        setSaveError(data.error || "Erro ao guardar transações");
+      }
+    } catch {
+      setSaveError("Erro de rede. Tenta novamente.");
+    } finally {
+      setSaving(false);
+    }
+  };
   const topCategories = Object.entries(result.summary.categoryCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
@@ -848,16 +883,37 @@ function ImportPreview({
       )}
 
       {/* Import Button */}
-      <button
-        className="w-full flex items-center justify-center gap-3 bg-emerald-500 text-white font-semibold py-4 rounded-2xl hover:bg-emerald-600 transition-all"
-        onClick={() => {
-          // TODO: Save to database
-          alert(`${result.imported.length} transações prontas para importar. Integração com BD em breve.`);
-        }}
-      >
-        <Check className="w-5 h-5" />
-        Importar {result.imported.length} transações
-      </button>
+      {saved ? (
+        <div className="w-full flex items-center justify-center gap-3 bg-emerald-100 text-emerald-700 font-semibold py-4 rounded-2xl">
+          <CheckCircle2 className="w-5 h-5" />
+          {result.imported.length} transações importadas com sucesso!
+        </div>
+      ) : (
+        <button
+          className="w-full flex items-center justify-center gap-3 bg-emerald-500 text-white font-semibold py-4 rounded-2xl hover:bg-emerald-600 disabled:opacity-50 transition-all"
+          onClick={handleSaveToDatabase}
+          disabled={saving}
+        >
+          {saving ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              A guardar...
+            </>
+          ) : (
+            <>
+              <Check className="w-5 h-5" />
+              Importar {result.imported.length} transações
+            </>
+          )}
+        </button>
+      )}
+
+      {saveError && (
+        <div className="flex items-start gap-3 bg-red-50 rounded-2xl p-4 border border-red-100">
+          <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-red-700">{saveError}</p>
+        </div>
+      )}
     </div>
   );
 }

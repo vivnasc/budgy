@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -10,46 +10,44 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   ArrowLeftRight,
+  Wallet,
   ShoppingCart,
   Utensils,
   Car,
   Zap,
   Home,
-  Wallet,
   GraduationCap,
   Heart,
   Smartphone,
 } from "lucide-react";
 import { TransactionItem } from "@/components/transaction-item";
 import { AddTransactionModal } from "@/components/add-transaction-modal";
+import { useTransactions } from "@/hooks/use-supabase-data";
+import type { Transaction } from "@/lib/supabase/types";
 
 type FilterType = "all" | "income" | "expense" | "transfer";
 
-interface Transaction {
-  id: string;
-  description: string;
-  category: string;
-  amount: number;
-  type: "income" | "expense" | "transfer";
-  date: string;
-  account: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
+const CATEGORY_ICONS: Record<string, typeof Wallet> = {
+  "Rendimento": Wallet,
+  "Salário": Wallet,
+  "Freelance": Smartphone,
+  "Alimentação": Utensils,
+  "Compras": ShoppingCart,
+  "Transporte": Car,
+  "Contas": Zap,
+  "Casa": Home,
+  "Educação": GraduationCap,
+  "Saúde": Heart,
+};
 
-const MOCK_TRANSACTIONS: Transaction[] = [
-  { id: "1", description: "Salário", category: "Rendimento", amount: 65000, type: "income", date: "2026-02-25", account: "Banco", icon: Wallet },
-  { id: "2", description: "Freelance Design", category: "Rendimento", amount: 15000, type: "income", date: "2026-02-25", account: "M-Pesa", icon: Smartphone },
-  { id: "3", description: "Shoprite", category: "Alimentação", amount: -4500, type: "expense", date: "2026-02-24", account: "M-Pesa", icon: ShoppingCart },
-  { id: "4", description: "Restaurante Polana", category: "Alimentação", amount: -1800, type: "expense", date: "2026-02-23", account: "M-Pesa", icon: Utensils },
-  { id: "5", description: "Combustível", category: "Transporte", amount: -3200, type: "expense", date: "2026-02-22", account: "Banco", icon: Car },
-  { id: "6", description: "Electricidade EDM", category: "Contas", amount: -2100, type: "expense", date: "2026-02-21", account: "M-Pesa", icon: Zap },
-  { id: "7", description: "Renda", category: "Casa", amount: -18000, type: "expense", date: "2026-02-20", account: "Banco", icon: Home },
-  { id: "8", description: "Propina UEM", category: "Educação", amount: -8500, type: "expense", date: "2026-02-19", account: "Banco", icon: GraduationCap },
-  { id: "9", description: "Farmácia", category: "Saúde", amount: -950, type: "expense", date: "2026-02-18", account: "Dinheiro", icon: Heart },
-  { id: "10", description: "Banco → M-Pesa", category: "Transferência", amount: -5000, type: "transfer", date: "2026-02-17", account: "Banco", icon: ArrowLeftRight },
-  { id: "11", description: "Gasolina", category: "Transporte", amount: -2800, type: "expense", date: "2026-02-16", account: "Banco", icon: Car },
-  { id: "12", description: "Supermercado", category: "Alimentação", amount: -6200, type: "expense", date: "2026-02-15", account: "M-Pesa", icon: ShoppingCart },
-];
+function getMonthDates(monthOffset: number) {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+  const from = d.toISOString().split("T")[0]!;
+  const to = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0]!;
+  const label = d.toLocaleDateString("pt-MZ", { month: "long", year: "numeric" });
+  return { from, to, label };
+}
 
 function groupByDate(transactions: Transaction[]): Record<string, Transaction[]> {
   return transactions.reduce(
@@ -72,29 +70,30 @@ function formatDate(dateStr: string): string {
   if (date.toDateString() === today.toDateString()) return "Hoje";
   if (date.toDateString() === yesterday.toDateString()) return "Ontem";
 
-  return date.toLocaleDateString("pt-MZ", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-}
-
-function computeRunningBalance(transactions: Transaction[]): number {
-  return transactions.reduce((sum, tx) => sum + tx.amount, 0);
+  return date.toLocaleDateString("pt-MZ", { weekday: "short", day: "numeric", month: "short" });
 }
 
 export default function TransacoesPage() {
-  const [currentMonth] = useState("Fevereiro 2026");
+  const [monthOffset, setMonthOffset] = useState(0);
   const [filter, setFilter] = useState<FilterType>("all");
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const filteredTransactions = MOCK_TRANSACTIONS.filter((tx) => {
-    if (filter !== "all" && tx.type !== filter) return false;
-    if (searchQuery && !tx.description.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    return true;
-  });
+  const { from, to, label: currentMonth } = useMemo(() => getMonthDates(monthOffset), [monthOffset]);
+  const typeFilter = filter === "all" ? undefined : filter;
+  const { data: transactions, loading } = useTransactions({ type: typeFilter, from, to, limit: 200 });
+
+  const filteredTransactions = useMemo(() => {
+    if (!transactions) return [];
+    if (!searchQuery) return transactions;
+    const q = searchQuery.toLowerCase();
+    return transactions.filter(
+      (tx) =>
+        (tx.description ?? "").toLowerCase().includes(q) ||
+        (tx.categories?.name ?? "").toLowerCase().includes(q)
+    );
+  }, [transactions, searchQuery]);
 
   const grouped = groupByDate(filteredTransactions);
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
@@ -104,7 +103,7 @@ export default function TransacoesPage() {
     .reduce((s, t) => s + t.amount, 0);
   const totalExpense = filteredTransactions
     .filter((t) => t.type === "expense")
-    .reduce((s, t) => s + Math.abs(t.amount), 0);
+    .reduce((s, t) => s + t.amount, 0);
 
   return (
     <div className="min-h-screen pb-4">
@@ -134,13 +133,19 @@ export default function TransacoesPage() {
 
         {/* Month Selector */}
         <div className="flex items-center justify-center gap-4 mb-4">
-          <button className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+          <button
+            onClick={() => setMonthOffset((m) => m - 1)}
+            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+          >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-sm font-semibold min-w-[140px] text-center">
+          <span className="text-sm font-semibold min-w-[140px] text-center capitalize">
             {currentMonth}
           </span>
-          <button className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+          <button
+            onClick={() => setMonthOffset((m) => Math.min(m + 1, 0))}
+            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+          >
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
@@ -192,10 +197,23 @@ export default function TransacoesPage() {
           </div>
         </div>
 
+        {loading && (
+          <div className="text-center py-8">
+            <div className="animate-pulse">
+              <div className="h-16 bg-gray-100 rounded-xl mb-3" />
+              <div className="h-16 bg-gray-100 rounded-xl mb-3" />
+              <div className="h-16 bg-gray-100 rounded-xl" />
+            </div>
+          </div>
+        )}
+
         {/* Grouped Transactions */}
         {sortedDates.map((date) => {
           const dayTransactions = grouped[date]!;
-          const dayTotal = computeRunningBalance(dayTransactions);
+          const dayTotal = dayTransactions.reduce(
+            (sum, tx) => sum + (tx.type === "expense" ? -tx.amount : tx.amount),
+            0
+          );
 
           return (
             <div key={date} className="animate-in">
@@ -203,38 +221,40 @@ export default function TransacoesPage() {
                 <span className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase">
                   {formatDate(date)}
                 </span>
-                <span
-                  className={`text-xs font-medium ${
-                    dayTotal >= 0 ? "text-emerald-600" : "text-red-500"
-                  }`}
-                >
+                <span className={`text-xs font-medium ${dayTotal >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                   {dayTotal >= 0 ? "+" : ""}
                   {dayTotal.toLocaleString("pt-MZ")} MZN
                 </span>
               </div>
               <div className="card divide-y divide-[var(--color-border)]">
-                {dayTransactions.map((tx) => (
-                  <TransactionItem
-                    key={tx.id}
-                    description={tx.description}
-                    category={tx.category}
-                    amount={tx.amount}
-                    type={tx.type}
-                    date={tx.date}
-                    account={tx.account}
-                    icon={tx.icon}
-                  />
-                ))}
+                {dayTransactions.map((tx) => {
+                  const icon = CATEGORY_ICONS[tx.categories?.name ?? ""] ?? Wallet;
+                  return (
+                    <TransactionItem
+                      key={tx.id}
+                      description={tx.description ?? ""}
+                      category={tx.categories?.name ?? "Outros"}
+                      amount={tx.type === "expense" ? -tx.amount : tx.amount}
+                      type={tx.type}
+                      date={tx.date}
+                      account={tx.accounts?.name ?? ""}
+                      icon={icon}
+                    />
+                  );
+                })}
               </div>
             </div>
           );
         })}
 
-        {filteredTransactions.length === 0 && (
+        {!loading && filteredTransactions.length === 0 && (
           <div className="text-center py-12">
             <Filter className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-sm text-[var(--color-text-muted)]">
               Nenhuma transacção encontrada
+            </p>
+            <p className="text-xs text-gray-300 mt-1">
+              Importa SMS ou extratos bancários para começar
             </p>
           </div>
         )}
