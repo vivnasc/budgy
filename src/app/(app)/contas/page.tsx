@@ -11,75 +11,36 @@ import {
   Wallet,
 } from "lucide-react";
 import { AccountCard } from "@/components/account-card";
+import { useAccounts } from "@/hooks/use-supabase-data";
+import type { Account } from "@/lib/supabase/types";
 
-interface Account {
-  id: string;
-  name: string;
-  type: string;
-  icon: React.ComponentType<{ className?: string }>;
-  balance: number;
-  currency: string;
-  color: string;
-  lastTransaction: string;
-  lastTransactionDate: string;
-}
-
-const MOCK_ACCOUNTS: Account[] = [
-  {
-    id: "1",
-    name: "M-Pesa",
-    type: "Mobile Money",
-    icon: Smartphone,
-    balance: 12450.0,
-    currency: "MZN",
-    color: "bg-red-500",
-    lastTransaction: "Shoprite -4.500 MZN",
-    lastTransactionDate: "24 Fev",
-  },
-  {
-    id: "2",
-    name: "Millennium BIM",
-    type: "Conta Corrente",
-    icon: Landmark,
-    balance: 45800.0,
-    currency: "MZN",
-    color: "bg-blue-500",
-    lastTransaction: "Salário +65.000 MZN",
-    lastTransactionDate: "25 Fev",
-  },
-  {
-    id: "3",
-    name: "Dinheiro Físico",
-    type: "Dinheiro",
-    icon: Banknote,
-    balance: 3200.0,
-    currency: "MZN",
-    color: "bg-amber-500",
-    lastTransaction: "Farmácia -950 MZN",
-    lastTransactionDate: "18 Fev",
-  },
-  {
-    id: "4",
-    name: "Poupança BIM",
-    type: "Conta Poupança",
-    icon: PiggyBank,
-    balance: 180000.0,
-    currency: "MZN",
-    color: "bg-emerald-500",
-    lastTransaction: "Depósito +10.000 MZN",
-    lastTransactionDate: "15 Fev",
-  },
-];
+const ACCOUNT_ICONS: Record<string, { icon: typeof Smartphone; color: string; label: string }> = {
+  mpesa: { icon: Smartphone, color: "bg-red-500", label: "Mobile Money" },
+  bank: { icon: Landmark, color: "bg-blue-500", label: "Conta Corrente" },
+  cash: { icon: Banknote, color: "bg-amber-500", label: "Dinheiro" },
+  savings: { icon: PiggyBank, color: "bg-emerald-500", label: "Conta Poupança" },
+  investment: { icon: TrendingUp, color: "bg-purple-500", label: "Investimento" },
+};
 
 export default function ContasPage() {
-  const totalBalance = MOCK_ACCOUNTS.reduce((sum, acc) => sum + acc.balance, 0);
-  const liquidAccounts = MOCK_ACCOUNTS.filter(
-    (a) => a.type !== "Conta Poupança"
-  );
-  const liquidBalance = liquidAccounts.reduce(
-    (sum, acc) => sum + acc.balance,
-    0
-  );
+  const { data: accounts, loading } = useAccounts();
+
+  const allAccounts = accounts ?? [];
+  const totalBalance = allAccounts.reduce((sum, acc) => sum + acc.balance, 0);
+  const savingsAccounts = allAccounts.filter((a) => a.type === "savings" || a.type === "investment");
+  const savingsBalance = savingsAccounts.reduce((sum, acc) => sum + acc.balance, 0);
+  const liquidBalance = totalBalance - savingsBalance;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-pulse text-center">
+          <div className="w-12 h-12 bg-primary-200 rounded-full mx-auto mb-3" />
+          <p className="text-sm text-gray-400">A carregar contas...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-4">
@@ -87,7 +48,6 @@ export default function ContasPage() {
       <header className="bg-gradient-to-br from-primary-500 to-primary-700 text-white px-4 pt-12 pb-6 rounded-b-3xl">
         <h1 className="text-xl font-bold mb-4">As Minhas Contas</h1>
 
-        {/* Net Worth Summary */}
         <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 space-y-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
@@ -105,15 +65,11 @@ export default function ContasPage() {
           <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/20">
             <div>
               <p className="text-primary-200 text-xs">Disponível</p>
-              <p className="text-sm font-bold">
-                {liquidBalance.toLocaleString("pt-MZ")} MZN
-              </p>
+              <p className="text-sm font-bold">{liquidBalance.toLocaleString("pt-MZ")} MZN</p>
             </div>
             <div>
               <p className="text-primary-200 text-xs">Poupança</p>
-              <p className="text-sm font-bold">
-                {(totalBalance - liquidBalance).toLocaleString("pt-MZ")} MZN
-              </p>
+              <p className="text-sm font-bold">{savingsBalance.toLocaleString("pt-MZ")} MZN</p>
             </div>
           </div>
         </div>
@@ -126,10 +82,10 @@ export default function ContasPage() {
             <ArrowUpDown className="w-4 h-4 text-primary-600" />
             <span className="text-sm font-medium">Transferir</span>
           </button>
-          <button className="flex-1 card p-3 flex items-center justify-center gap-2 hover:bg-gray-50 active:bg-gray-100 transition-colors">
+          <a href="/transacoes" className="flex-1 card p-3 flex items-center justify-center gap-2 hover:bg-gray-50 active:bg-gray-100 transition-colors">
             <TrendingUp className="w-4 h-4 text-primary-600" />
             <span className="text-sm font-medium">Histórico</span>
-          </button>
+          </a>
         </div>
 
         {/* Account Cards */}
@@ -137,55 +93,68 @@ export default function ContasPage() {
           <h2 className="font-semibold mb-3">
             Contas{" "}
             <span className="text-xs text-[var(--color-text-muted)] font-normal">
-              ({MOCK_ACCOUNTS.length})
+              ({allAccounts.length})
             </span>
           </h2>
 
-          <div className="space-y-3">
-            {MOCK_ACCOUNTS.map((account) => (
-              <AccountCard
-                key={account.id}
-                name={account.name}
-                type={account.type}
-                icon={account.icon}
-                balance={account.balance}
-                currency={account.currency}
-                color={account.color}
-                lastTransaction={account.lastTransaction}
-                lastTransactionDate={account.lastTransactionDate}
-              />
-            ))}
-          </div>
+          {allAccounts.length === 0 ? (
+            <div className="card p-8 text-center">
+              <Wallet className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-gray-500 mb-1">Sem contas ainda</p>
+              <p className="text-xs text-gray-400">Adiciona M-Pesa, Banco ou Dinheiro para começar</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {allAccounts.map((account) => {
+                const config = ACCOUNT_ICONS[account.type] ?? { icon: Wallet, color: "bg-gray-500", label: account.type };
+                return (
+                  <AccountCard
+                    key={account.id}
+                    name={account.name}
+                    type={config.label}
+                    icon={config.icon}
+                    balance={account.balance}
+                    currency={account.currency}
+                    color={account.color ?? config.color}
+                    lastTransaction=""
+                    lastTransactionDate=""
+                  />
+                );
+              })}
+            </div>
+          )}
         </section>
 
         {/* Distribution */}
-        <section className="card p-4">
-          <h3 className="font-semibold text-sm mb-3">Distribuição</h3>
-          <div className="space-y-2">
-            {MOCK_ACCOUNTS.map((account) => {
-              const percent = (account.balance / totalBalance) * 100;
-              return (
-                <div key={account.id} className="flex items-center gap-3">
-                  <span className="text-xs text-[var(--color-text-secondary)] w-24 truncate">
-                    {account.name}
-                  </span>
-                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${account.color} rounded-full transition-all duration-500`}
-                      style={{ width: `${percent}%` }}
-                    />
+        {allAccounts.length > 0 && totalBalance > 0 && (
+          <section className="card p-4">
+            <h3 className="font-semibold text-sm mb-3">Distribuição</h3>
+            <div className="space-y-2">
+              {allAccounts.map((account) => {
+                const percent = (account.balance / totalBalance) * 100;
+                const config = ACCOUNT_ICONS[account.type] ?? { color: "bg-gray-500" };
+                return (
+                  <div key={account.id} className="flex items-center gap-3">
+                    <span className="text-xs text-[var(--color-text-secondary)] w-24 truncate">
+                      {account.name}
+                    </span>
+                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${account.color ?? config.color} rounded-full transition-all duration-500`}
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-medium w-10 text-right">
+                      {Math.round(percent)}%
+                    </span>
                   </div>
-                  <span className="text-xs font-medium w-10 text-right">
-                    {Math.round(percent)}%
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </main>
 
-      {/* FAB to add account */}
       <button className="fab">
         <Plus className="w-6 h-6" />
       </button>
