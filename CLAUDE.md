@@ -117,8 +117,8 @@ HOTMART, APPLE.COM/BILL, Leonardo.AI, ElevenLabs, InVideo, Kits.AI, Think Diffus
 
 ## Schema da Base de Dados
 
-O schema está em `supabase/migrations/00003_money_schema.sql` no repo VIDA.
-Precisa ser copiado e aplicado ao projeto Supabase do BUDGY.
+O schema está em `supabase/migrations/00003_money_schema.sql` (copiado do repo VIDA).
+Precisa ser aplicado ao projeto Supabase do BUDGY.
 
 Tabelas principais:
 - `money_schema.accounts` — contas bancárias (CPC, Moza Banco, Standard Bank, M-Pesa, etc.)
@@ -126,53 +126,66 @@ Tabelas principais:
 - `money_schema.categories` — categorias (sistema + custom do utilizador)
 - `money_schema.budgets` — orçamentos por categoria
 - `money_schema.goals` — metas de poupança
-- `money_schema.debts` — dívidas (devo / devem-me)
+- `money_schema.funds` — fundos reservados (emergência, educação, etc.)
+- `money_schema.xitique_groups` — grupos de xitique
+- `money_schema.debt_records` — dívidas (devo / devem-me)
 
 ## Estrutura de Ficheiros do BUDGY
 
 ```
 src/
 ├── app/
-│   ├── layout.tsx          — Root layout (BUDGY branding, PWA meta)
+│   ├── layout.tsx          — Root layout (BUDGY branding, PWA meta, install prompt)
 │   ├── page.tsx            — Landing page
 │   ├── login/page.tsx      — Auth (email, Google, Facebook)
 │   ├── auth/callback/       — OAuth callback
 │   ├── (app)/              — Protected routes (authenticated)
 │   │   ├── layout.tsx      — App layout (BottomNav, FeedbackButton)
-│   │   ├── painel/         — Dashboard
-│   │   ├── transacoes/     — Transaction list
+│   │   ├── painel/         — Dashboard (ligado ao Supabase)
+│   │   ├── transacoes/     — Transaction list (ligado ao Supabase)
 │   │   ├── orcamento/      — Budget management
 │   │   ├── metas/          — Financial goals
 │   │   ├── contas/         — Account management
 │   │   ├── xitique/        — Rotating savings (Mozambican tradition)
 │   │   ├── dividas/        — Debt tracking
 │   │   ├── relatorios/     — Reports with charts
-│   │   ├── importar/       — Import (SMS + file upload)
+│   │   ├── importar/       — Import (SMS + file upload, guarda na BD)
 │   │   └── educacao/       — Financial education
 │   └── api/
-│       ├── transactions/   — CRUD transactions
+│       ├── transactions/   — CRUD transactions (Supabase)
+│       ├── accounts/       — CRUD accounts (Supabase)
+│       ├── budgets/        — CRUD budgets (Supabase)
+│       ├── goals/          — CRUD goals (Supabase)
+│       ├── debts/          — CRUD debts (Supabase)
 │       ├── sms-parse/      — Parse SMS messages
 │       └── import/         — Parse bank statements
 ├── components/
 │   ├── bottom-nav.tsx      — Mobile bottom navigation
-│   ├── add-transaction-modal.tsx — Manual entry form
+│   ├── add-transaction-modal.tsx — Manual entry form (guarda na BD)
 │   ├── balance-card.tsx    — Balance display
 │   ├── account-card.tsx    — Account card
 │   ├── transaction-item.tsx — Transaction list item
 │   ├── budget-progress.tsx — Budget progress bar
 │   ├── goal-card.tsx       — Savings goal card
-│   └── shared/             — Inlined from @vida/ui
+│   └── shared/
 │       ├── auth-form.tsx
 │       ├── analytics.tsx
 │       ├── feedback-button.tsx
-│       └── service-worker-register.tsx
+│       ├── service-worker-register.tsx
+│       └── pwa-install-prompt.tsx — Install prompt + offline/sync indicator
+├── hooks/
+│   └── use-supabase-data.ts — React hooks: useDashboard, useTransactions, useAccounts, etc.
 └── lib/
-    ├── auth/               — Inlined from @vida/auth
-    │   ├── client.ts       — Browser Supabase client
-    │   ├── server.ts       — Server Supabase client
+    ├── auth/               — Auth module
+    │   ├── client.ts       — Browser Supabase client (singleton)
+    │   ├── server.ts       — Server Supabase client (cookies)
     │   ├── middleware.ts    — Auth middleware
     │   ├── hooks.ts        — useUser, useSession, useAuth
     │   └── index.ts
+    ├── supabase/           — Typed data layer
+    │   ├── types.ts        — TypeScript types matching money_schema
+    │   └── queries.ts      — Reusable CRUD queries for all tables
+    ├── offline-storage.ts  — IndexedDB offline cache + sync queue
     ├── sms-parser.ts       — Parse SMS from 7 banks
     ├── bank-statement-parser.ts — Parse CPC, Moza, Standard Bank CSV/Excel
     ├── mobills-import.ts    — Parse Mobills export with category mapping
@@ -188,33 +201,47 @@ src/
 - ✅ Import Mobills (CSV + Excel) com mapeamento de categorias
 - ✅ Auto-categorização com 80+ regras (comerciantes reais da Vivianne)
 - ✅ Auth completo (email, Google, Facebook)
-- ✅ PWA setup básico (manifest, service worker, icons)
 - ✅ Standalone — zero dependências externas de monorepo
 - ✅ Branding BUDGY (nome, cores, manifest)
+- ✅ **Backend Supabase ligado** — tipos TypeScript, queries, React hooks para todas as tabelas
+- ✅ **Dashboard e Transações** — buscam dados reais do Supabase (com empty state gracioso)
+- ✅ **API routes CRUD** — transactions, accounts, budgets, goals, debts
+- ✅ **Import guarda na BD** — ficheiros e SMS aprovados são persistidos via POST /api/transactions
+- ✅ **Add Transaction modal** — guarda directamente na BD
+- ✅ **PWA melhorada** — IndexedDB offline storage, install prompt nativo, indicador online/offline, auto-sync, service worker com pre-cache e cache-first para assets
 
 ## O Que FALTA (prioridade)
 
-### 1. Backend Real (URGENTE)
-Todos os dados nas páginas são **MOCK**. Nada está ligado ao Supabase.
-- Ligar transações CRUD ao Supabase (money_schema.transactions)
-- Import que guarda na BD (não só preview)
-- SMS parse → guardar transações aprovadas na BD
-- Contas reais do utilizador (money_schema.accounts)
-- Orçamentos, metas, dívidas — tudo CRUD real
+### 1. Ligar as restantes páginas ao Supabase
+As páginas **painel** e **transacoes** já buscam dados reais. As restantes ainda usam mock data:
+- contas/ — precisa usar `useAccounts()` hook
+- orcamento/ — precisa usar `useBudgets()` hook
+- metas/ — precisa usar `useGoals()` hook
+- dividas/ — precisa usar `useDebts()` hook
+- xitique/ — precisa usar `useXitiqueGroups()` hook
+- relatorios/ — precisa agregar dados reais para gráficos
 
-### 2. PWA Melhorado
-- Offline-first com IndexedDB/localStorage
-- Install prompt nativo
-- Push notifications (alertas de SMS bancário)
-- Cache strategies melhores no service worker
+Os hooks e queries já existem em `src/hooks/use-supabase-data.ts` e `src/lib/supabase/queries.ts`.
 
-### 3. Logo/Favicon Final
+### 2. Configurar Supabase real
+- Criar projecto no supabase.com
+- Aplicar o schema `supabase/migrations/00003_money_schema.sql`
+- Configurar Auth providers (Google, Facebook)
+- Preencher `.env.local` com URL e ANON_KEY
+- Testar fluxo completo end-to-end
+
+### 3. Push Notifications
+- Alertas de SMS bancário
+- Lembretes de orçamento ultrapassado
+- Notificações de xitique (minha vez)
+
+### 4. Logo/Favicon Final
 - Conceito: **budgie (periquito)** verde esmeralda — mascote natural do nome BUDGY
 - Cores: gradiente #34D399 → #059669
 - A Vivianne tem Leonardo.AI e outras ferramentas de IA para gerar
 - Favicon SVG actual é um esboço básico
 
-### 4. Futuro
+### 5. Futuro
 - React Native/Expo para App Store e Play Store
 - Leitura automática de SMS do telefone (permissão Android)
 - Integração directa com APIs bancárias (quando disponíveis em MZ)
