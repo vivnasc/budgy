@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "BUDGY - Sabe para onde vai cada metical",
   description:
-    "O teu dinheiro organizado sem esforço. Importa SMS do banco, controla gastos, poupa para os teus sonhos e gere o xitique — tudo grátis.",
+    "O teu dinheiro organizado sem esforço. Importa SMS do banco, controla gastos, poupa para os teus sonhos e gere o xitique.",
 };
 
 export default function LandingPage() {
@@ -30,7 +30,7 @@ export default function LandingPage() {
       <section className="bg-gray-900 px-4 pt-16 pb-20 sm:pt-24 sm:pb-28">
         <div className="max-w-3xl mx-auto text-center">
           <div className="inline-block bg-emerald-500/10 text-emerald-400 text-sm font-medium px-4 py-1.5 rounded-full mb-6 border border-emerald-500/20">
-            100% gr&aacute;tis &middot; Funciona no telem&oacute;vel
+            Feito para ti &middot; Funciona no telem&oacute;vel
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-tight">
             O teu sal&aacute;rio chega.<br />
@@ -50,7 +50,7 @@ export default function LandingPage() {
             </Link>
           </div>
           <p className="mt-4 text-sm text-gray-500">
-            Sem cart&atilde;o. Sem instala&ccedil;&atilde;o. Abre e usa.
+            Sem instala&ccedil;&atilde;o. Abre no telem&oacute;vel e usa.
           </p>
         </div>
       </section>
@@ -72,7 +72,7 @@ export default function LandingPage() {
               "O xitique fica desorganizado e ningu\u00E9m sabe de quem \u00E9 a vez",
               "Queres poupar para algo mas o dinheiro nunca sobra",
               "J\u00E1 tentaste apps mas s\u00E3o todas em ingl\u00EAs ou pedem para escrever tudo \u00E0 m\u00E3o",
-              "Pagas subscri\u00E7\u00E3o mensal de uma app que nem usas bem",
+              "Apps complicadas que n\u00E3o entendem a tua realidade",
             ].map((text) => (
               <div key={text} className="flex items-start gap-3 bg-white rounded-xl p-4 border border-gray-100">
                 <span className="text-red-400 mt-0.5">&#x2717;</span>
@@ -140,7 +140,7 @@ export default function LandingPage() {
               { emoji: "\uD83D\uDC65", title: "Xitique", desc: "Poupan\u00E7a rotativa digital" },
               { emoji: "\uD83D\uDCB3", title: "D\u00EDvidas", desc: "Quem deve a quem" },
               { emoji: "\uD83D\uDCC8", title: "Relat\u00F3rios", desc: "Gr\u00E1ficos simples" },
-              { emoji: "\uD83C\uDD93", title: "Gr\u00E1tis", desc: "Sem subscri\u00E7\u00F5es. Sempre." },
+              { emoji: "\uD83D\uDE80", title: "R\u00E1pido", desc: "Configura em 2 minutos" },
             ].map((f) => (
               <div key={f.title} className="bg-white rounded-xl p-4 border border-gray-100">
                 <div className="text-2xl mb-2">{f.emoji}</div>
@@ -185,7 +185,7 @@ export default function LandingPage() {
                 href="/login"
                 className="mt-6 inline-flex items-center gap-2 bg-white text-emerald-600 font-semibold px-8 py-3.5 rounded-2xl shadow-lg hover:shadow-xl transition-all"
               >
-                Criar conta gr&aacute;tis &rarr;
+                Criar conta &rarr;
               </Link>
             </div>
           </div>
