@@ -60,21 +60,63 @@ export interface ImportResult {
  * Consolidates the user's many Mobills categories into cleaner groups.
  */
 const MOBILLS_CATEGORY_MAP: Record<string, string> = {
-  // Alimentação
+  // ─── Real Mobills categories from user data (59 categories) ───
+
+  // Alimentação & Restaurantes
+  "supermercado": "Alimentação",
+  "talho": "Alimentação",
+  "mercearia": "Alimentação",
   "alimentação": "Alimentação",
   "alimentacao": "Alimentação",
   "comida": "Alimentação",
-  "supermercado": "Alimentação",
-  "mercearia": "Alimentação",
-  "restaurante": "Restaurantes",
+  "padaria": "Alimentação",
   "restaurantes": "Restaurantes",
+  "restaurante": "Restaurantes",
+  "almoços de família": "Restaurantes",
+  "bottle store & smoke": "Restaurantes",
   "café": "Restaurantes",
   "lanche": "Restaurantes",
   "delivery": "Restaurantes",
   "fast food": "Restaurantes",
-  "padaria": "Alimentação",
 
-  // Transporte
+  // Casa & Contas
+  "home bills": "Contas & Serviços",
+  "home clothes & dish": "Casa",
+  "house appliances & furniture": "Casa",
+  "garden": "Casa",
+  "manutenção piscina": "Casa",
+  "obras e reparações": "Casa",
+  "katembe home project": "Casa",
+  "aquisição de habitação": "Casa",
+
+  // Saúde & Beleza & Fitness
+  "health": "Saúde",
+  "beauty": "Beleza & Cuidados",
+  "fitness": "Saúde",
+
+  // Educação
+  "education": "Educação",
+  "7ecos books": "Educação",
+  "writing": "Educação",
+  "hobbies: escritora & afins": "Educação",
+
+  // Família & Filhos
+  "baby cris": "Família",
+  "kidz toys and fun": "Família",
+  "ajudas familiares": "Família",
+  "aniversários": "Família",
+  "feriados e festas": "Família",
+  "filhos": "Família",
+  "família": "Família",
+  "familia": "Família",
+  "crianças": "Família",
+  "criancas": "Família",
+  "gift": "Família",
+  "gifts": "Família",
+
+  // Transporte & Viatura
+  "transportation": "Transporte",
+  "aquisição de viatura": "Transporte",
   "transporte": "Transporte",
   "combustível": "Combustível",
   "combustivel": "Combustível",
@@ -92,7 +134,130 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "carro": "Automóvel",
   "automóvel": "Automóvel",
 
-  // Casa
+  // Viagens
+  "holidays": "Viagens",
+  "viagens despesas": "Viagens",
+  "viagens serviço": "Viagens",
+  "subsídio viagem": "Viagens",
+  "viagem": "Viagens",
+  "viagens": "Viagens",
+  "férias": "Viagens",
+  "ferias": "Viagens",
+  "hotel": "Viagens",
+
+  // Pessoal & Roupa
+  "clothing": "Roupa",
+  "roupa": "Roupa",
+  "vestuário": "Roupa",
+  "vestuario": "Roupa",
+  "despesas pessoais bruno": "Pessoal",
+  "pessoal": "Pessoal",
+  "personal gadgets": "Compras",
+  "espiritualidade": "Pessoal",
+  "documentos id": "Pessoal",
+
+  // Subscrições & Digital
+  "digital apps & services": "Subscrições",
+  "apple bills": "Subscrições",
+  "mensalidades coachme": "Subscrições",
+  "subscrição": "Subscrições",
+  "subscricao": "Subscrições",
+  "assinatura": "Subscrições",
+  "netflix": "Subscrições",
+  "spotify": "Subscrições",
+  "streaming": "Subscrições",
+
+  // Lazer & Entretenimento
+  "entertainment": "Lazer",
+  "lazer": "Lazer",
+  "entretenimento": "Lazer",
+  "cinema": "Lazer",
+  "diversão": "Lazer",
+  "levantamentos fim de semana": "Lazer",
+
+  // Animais
+  "pets": "Animais",
+  "animais": "Animais",
+
+  // Doações & Ofertas
+  "donations": "Doações",
+  "doação": "Doações",
+  "doacao": "Doações",
+  "igreja": "Doações",
+  "dízimo": "Doações",
+  "dizimo": "Doações",
+  "caridade": "Doações",
+  "oferta": "Doações",
+
+  // Trabalho & Negócio
+  "employees wages": "Negócio",
+  "sete-ecos project": "Negócio",
+
+  // Dívidas & Empréstimos
+  "loan": "Dívidas",
+  "empréstimos bancários": "Dívidas",
+  "crédito fml": "Dívidas",
+  "moza credito": "Dívidas",
+  "reembolso lomesio": "Dívidas",
+  "empréstimo": "Dívidas",
+  "emprestimo": "Dívidas",
+  "dívida": "Dívidas",
+  "divida": "Dívidas",
+  "cartão crédito": "Dívidas",
+  "juros": "Dívidas",
+
+  // Taxas Bancárias
+  "comissões bancárias": "Taxas Bancárias",
+  "taxa": "Taxas Bancárias",
+  "taxa bancária": "Taxas Bancárias",
+  "comissão": "Taxas Bancárias",
+
+  // Contas & Serviços
+  "contas": "Contas & Serviços",
+  "água": "Contas & Serviços",
+  "agua": "Contas & Serviços",
+  "electricidade": "Contas & Serviços",
+  "luz": "Contas & Serviços",
+  "gás": "Contas & Serviços",
+  "gas": "Contas & Serviços",
+  "internet": "Comunicação",
+  "telefone": "Comunicação",
+  "telemóvel": "Comunicação",
+  "telemovel": "Comunicação",
+  "comunicação": "Comunicação",
+  "comunicacao": "Comunicação",
+  "tv": "Comunicação",
+
+  // Rendimentos
+  "salary": "Salário",
+  "salário": "Salário",
+  "salario": "Salário",
+  "vencimento": "Salário",
+  "ordenado": "Salário",
+  "bruno income": "Outro Rendimento",
+  "vendas": "Outro Rendimento",
+  "award": "Outro Rendimento",
+  "freelance": "Freelance",
+  "bónus": "Bónus",
+  "bonus": "Bónus",
+  "rendimento": "Outro Rendimento",
+  "renda (recebida)": "Rendimento Passivo",
+  "dividendos": "Rendimento Passivo",
+  "reembolso": "Reembolso",
+  "investimento": "Investimento",
+  "investimentos": "Investimento",
+  "poupança": "Poupança",
+  "poupanca": "Poupança",
+  "xitique": "Xitique",
+
+  // Compras
+  "compras": "Compras",
+  "shopping": "Compras",
+  "electrónica": "Compras",
+  "electronica": "Compras",
+  "tecnologia": "Compras",
+
+  // Casa genérico
   "casa": "Casa",
   "moradia": "Casa",
   "renda": "Casa",
@@ -106,30 +271,7 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "empregada": "Casa",
   "doméstica": "Casa",
 
-  // Contas & Serviços
-  "contas": "Contas",
-  "água": "Contas",
-  "agua": "Contas",
-  "electricidade": "Contas",
-  "eletricidade": "Contas",
-  "luz": "Contas",
-  "gás": "Contas",
-  "gas": "Contas",
-  "internet": "Comunicação",
-  "telefone": "Comunicação",
-  "telemóvel": "Comunicação",
-  "telemovel": "Comunicação",
-  "comunicação": "Comunicação",
-  "comunicacao": "Comunicação",
-  "tv": "Comunicação",
-  "streaming": "Comunicação",
-  "netflix": "Comunicação",
-  "spotify": "Comunicação",
-  "subscrição": "Subscrições",
-  "subscricao": "Subscrições",
-  "assinatura": "Subscrições",
-
-  // Saúde
+  // Saúde genérico
   "saúde": "Saúde",
   "saude": "Saúde",
   "farmácia": "Saúde",
@@ -142,9 +284,8 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "ginásio": "Saúde",
   "ginasio": "Saúde",
   "gym": "Saúde",
-  "seguro saúde": "Saúde",
 
-  // Educação
+  // Educação genérico
   "educação": "Educação",
   "educacao": "Educação",
   "escola": "Educação",
@@ -154,90 +295,19 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "formação": "Educação",
   "formacao": "Educação",
   "propina": "Educação",
-
-  // Lazer & Entretenimento
-  "lazer": "Lazer",
-  "entretenimento": "Lazer",
-  "cinema": "Lazer",
-  "viagem": "Viagens",
-  "viagens": "Viagens",
-  "férias": "Viagens",
-  "ferias": "Viagens",
-  "hotel": "Viagens",
-  "diversão": "Lazer",
-
-  // Pessoal
-  "roupa": "Pessoal",
-  "vestuário": "Pessoal",
-  "vestuario": "Pessoal",
-  "beleza": "Pessoal",
-  "cabeleireiro": "Pessoal",
-  "barbeiro": "Pessoal",
-  "higiene": "Pessoal",
-  "cosmético": "Pessoal",
-  "cosmetico": "Pessoal",
-  "pessoal": "Pessoal",
-  "presente": "Pessoal",
-  "presentes": "Pessoal",
-
-  // Compras
-  "compras": "Compras",
-  "shopping": "Compras",
-  "electrónica": "Compras",
-  "electronica": "Compras",
-  "tecnologia": "Compras",
-
-  // Finanças
-  "investimento": "Investimento",
-  "investimentos": "Investimento",
-  "poupança": "Poupança",
-  "poupanca": "Poupança",
-  "xitique": "Xitique",
-  "empréstimo": "Dívidas",
-  "emprestimo": "Dívidas",
-  "dívida": "Dívidas",
-  "divida": "Dívidas",
-  "cartão crédito": "Dívidas",
-  "juros": "Dívidas",
-  "taxa": "Taxas Bancárias",
-  "taxa bancária": "Taxas Bancárias",
-  "comissão": "Taxas Bancárias",
-  "banco": "Taxas Bancárias",
-
-  // Rendimentos
-  "salário": "Salário",
-  "salario": "Salário",
-  "vencimento": "Salário",
-  "ordenado": "Salário",
-  "freelance": "Freelance",
-  "bónus": "Bónus",
-  "bonus": "Bónus",
-  "rendimento": "Outro Rendimento",
-  "renda (recebida)": "Rendimento Passivo",
-  "dividendos": "Rendimento Passivo",
-  "reembolso": "Reembolso",
-
-  // Família
-  "filhos": "Família",
-  "família": "Família",
-  "familia": "Família",
-  "crianças": "Família",
-  "criancas": "Família",
-  "animais": "Animais",
-  "pets": "Animais",
-
-  // Doações
-  "doação": "Doações",
-  "doacao": "Doações",
-  "igreja": "Doações",
-  "dízimo": "Doações",
-  "dizimo": "Doações",
-  "caridade": "Doações",
-  "oferta": "Doações",
+  "beleza": "Beleza & Cuidados",
+  "cabeleireiro": "Beleza & Cuidados",
+  "cosmético": "Beleza & Cuidados",
+  "cosmetico": "Beleza & Cuidados",
+  "higiene": "Beleza & Cuidados",
 
   // Genérico
+  "others": "Outros",
   "outro": "Outros",
   "outros": "Outros",
+  "other": "Outros",
+  "paid": "Outros",
+  "adjustment": "Ajuste",
   "transferência": "Transferência",
   "transferencia": "Transferência",
   "ajuste": "Ajuste",
@@ -472,14 +542,15 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       }
 
       // Skip rows without amount
-      const amount = parseMobillsAmount(row.amount || "0");
-      if (amount === 0) {
+      const rawAmount = parseMobillsAmount(row.amount || "0");
+      if (rawAmount === 0) {
         skipped++;
         continue;
       }
 
       const date = parseMobillsDate(row.date || "");
-      const type = row.type ? parseTransactionType(row.type) : (amount < 0 ? "expense" : "income");
+      const type = row.type ? parseTransactionType(row.type) : (rawAmount < 0 ? "expense" : "income");
+      const amount = Math.abs(rawAmount);
       const originalCategory = row.category || "Outros";
       const { mapped, needsReview } = mapCategory(originalCategory);
 
