@@ -1,6 +1,6 @@
 // BUDGY Service Worker - Network-first with offline support
-const CACHE_NAME = "budgy-v2-" + Date.now();
-const STATIC_CACHE = "budgy-static-v1";
+const CACHE_NAME = "budgy-v3-" + Date.now();
+const STATIC_CACHE = "budgy-static-v2";
 
 // Static assets to pre-cache for offline use
 const PRECACHE_URLS = [
@@ -35,7 +35,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key !== CACHE_NAME && key !== STATIC_CACHE && key.startsWith("budgy-"))
+          .filter((key) => key !== CACHE_NAME && key !== STATIC_CACHE)
           .map((key) => caches.delete(key))
       )
     ).then(() => self.clients.claim())
