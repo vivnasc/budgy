@@ -317,6 +317,7 @@ const HEADER_MAP: Record<string, string> = {
   conta: "account",
   account: "account",
   valor: "amount",
+  value: "amount",
   amount: "amount",
   quantia: "amount",
   tipo: "type",

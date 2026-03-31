@@ -572,9 +572,8 @@ function ImportTab() {
               <div>
                 <h3 className="text-sm font-bold text-blue-900">Importar Extrato Bancário</h3>
                 <p className="text-xs text-blue-700 mt-1 leading-relaxed">
-                  Carrega o extrato do teu banco (CPC, Moza Banco, Standard Bank)
-                  ou a exportação do Mobills. O BUDGY deteta o formato, organiza
-                  as categorias e importa tudo automaticamente.
+                  Carrega o extrato do teu banco ou a exportação do Mobills.
+                  O BUDGY deteta o formato, organiza as categorias e importa tudo automaticamente.
                 </p>
               </div>
             </div>
@@ -657,35 +656,21 @@ function ImportTab() {
             </h3>
             <div className="space-y-3">
               <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
-                  CPC
-                </div>
+                <span className="text-base">🏦</span>
                 <span className="text-xs text-gray-600">
-                  Internet Banking CPC → Extractos → Exportar CSV
+                  Internet Banking do teu banco → Extractos → Exportar CSV ou Excel
                 </span>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
-                  MZ
-                </div>
+                <span className="text-base">📱</span>
                 <span className="text-xs text-gray-600">
-                  App Moza Banco → Movimentos → Download CSV
+                  App do banco → Movimentos → Download / Exportar
                 </span>
               </div>
               <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
-                  SB
-                </div>
+                <span className="text-base">📊</span>
                 <span className="text-xs text-gray-600">
-                  Standard Bank Online → Extracto → Download Excel
-                </span>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
-                  MB
-                </div>
-                <span className="text-xs text-gray-600">
-                  Mobills → Definições → Exportar dados (CSV ou Excel)
+                  Mobills → Definições → Exportar dados (Excel)
                 </span>
               </div>
             </div>

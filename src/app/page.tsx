@@ -36,7 +36,7 @@ export default function LandingPage() {
             <span className="text-emerald-400">Para onde vai?</span>
           </h1>
           <p className="mt-6 text-lg text-gray-400 max-w-xl mx-auto leading-relaxed">
-            Entre a creche, o supermercado, a farm&aacute;cia e as transfer&ecirc;ncias
+            Entre as contas, as compras e as transfer&ecirc;ncias
             &mdash; o dinheiro desaparece. O BUDGY mostra-te exactamente para onde,
             sem teres de escrever nada &agrave; m&atilde;o.
           </p>
@@ -66,8 +66,8 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
             {[
-              "Pagas o supermercado, a farm\u00E1cia, o combust\u00EDvel, a creche\u2026 e perde-se a conta",
-              "Transferes entre v\u00E1rias contas e j\u00E1 n\u00E3o sabes o saldo total",
+              "Pagas aqui, ali, acol\u00E1\u2026 e no fim do m\u00EAs perde-se a conta",
+              "Transferes entre contas e j\u00E1 n\u00E3o sabes o saldo total",
               "O xitique fica desorganizado e ningu\u00E9m sabe de quem \u00E9 a vez",
               "Queres poupar para algo mas o dinheiro nunca sobra",
               "J\u00E1 tentaste apps mas s\u00E3o todas em ingl\u00EAs ou pedem para escrever tudo \u00E0 m\u00E3o",
@@ -97,7 +97,7 @@ export default function LandingPage() {
               <div className="text-3xl mb-3">&#x1F4F1;</div>
               <h3 className="font-bold text-gray-900 mb-2">Cola o SMS do banco</h3>
               <p className="text-sm text-gray-500 leading-relaxed">
-                Recebeste uma notifica&ccedil;&atilde;o do M-Pesa ou do banco?
+                Recebeste uma notifica&ccedil;&atilde;o do banco ou carteira m&oacute;vel?
                 Cola aqui. O BUDGY l&ecirc; o valor, a data e organiza por categoria.
                 Tu s&oacute; confirmas.
               </p>
@@ -131,7 +131,7 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {[
-              { emoji: "\uD83D\uDCB0", title: "V\u00E1rias contas", desc: "Banco, M-Pesa, e-Mola, dinheiro f\u00EDsico" },
+              { emoji: "\uD83D\uDCB0", title: "V\u00E1rias contas", desc: "Bancos, carteiras m\u00F3veis, dinheiro" },
               { emoji: "\uD83D\uDCE9", title: "Importa SMS", desc: "Qualquer banco" },
               { emoji: "\uD83D\uDCC1", title: "Importa extratos", desc: "CSV e Excel" },
               { emoji: "\uD83D\uDCCA", title: "Or\u00E7amentos", desc: "Limites por categoria" },

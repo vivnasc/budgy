@@ -33,32 +33,32 @@ export const SUPPORTED_BANK_FORMATS: BankInfo[] = [
     icon: "sparkles",
   },
   {
-    id: "cpc",
-    name: "CPC",
-    description: "Caixa de Poupança e Crédito",
-    fileTypes: [".csv"],
-    icon: "building",
-  },
-  {
-    id: "moza",
-    name: "Moza Banco",
-    description: "Moza Banco S.A.",
-    fileTypes: [".csv"],
-    icon: "building",
-  },
-  {
-    id: "standard-bank",
-    name: "Standard Bank",
-    description: "Standard Bank Moçambique",
-    fileTypes: [".xlsx"],
-    icon: "building",
-  },
-  {
     id: "mobills",
     name: "Mobills",
     description: "Exportação do app Mobills",
     fileTypes: [".csv", ".xlsx"],
     icon: "smartphone",
+  },
+  {
+    id: "cpc",
+    name: "Extrato CSV (Inglês)",
+    description: "CSV com colunas em inglês e ponto decimal",
+    fileTypes: [".csv"],
+    icon: "building",
+  },
+  {
+    id: "moza",
+    name: "Extrato CSV (Português)",
+    description: "CSV com ponto-e-vírgula e vírgula decimal",
+    fileTypes: [".csv"],
+    icon: "building",
+  },
+  {
+    id: "standard-bank",
+    name: "Extrato Excel",
+    description: "Ficheiro Excel (.xlsx) do banco",
+    fileTypes: [".xlsx"],
+    icon: "building",
   },
 ];
 
