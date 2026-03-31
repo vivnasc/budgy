@@ -9,16 +9,16 @@ export const metadata: Metadata = {
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gray-50">
       {/* Nav */}
-      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-100">
+      <nav className="sticky top-0 z-50 bg-gray-900/90 backdrop-blur-lg border-b border-gray-800">
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14">
-          <span className="text-xl font-bold text-gray-900">
-            <span className="text-emerald-500">B</span>UDGY
+          <span className="text-xl font-bold text-white">
+            <span className="text-emerald-400">B</span>UDGY
           </span>
           <Link
             href="/login"
-            className="bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold px-5 py-2 rounded-xl transition-colors"
+            className="bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold px-5 py-2 rounded-xl transition-colors"
           >
             Entrar
           </Link>
@@ -26,16 +26,16 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="px-4 pt-16 pb-20 sm:pt-24 sm:pb-28">
+      <section className="bg-gray-900 px-4 pt-16 pb-20 sm:pt-24 sm:pb-28">
         <div className="max-w-3xl mx-auto text-center">
-          <div className="inline-block bg-emerald-50 text-emerald-700 text-sm font-medium px-4 py-1.5 rounded-full mb-6">
+          <div className="inline-block bg-emerald-500/10 text-emerald-400 text-sm font-medium px-4 py-1.5 rounded-full mb-6 border border-emerald-500/20">
             100% gr&aacute;tis &middot; Funciona no telem&oacute;vel
           </div>
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-tight">
             O teu sal&aacute;rio chega.<br />
-            <span className="text-emerald-500">Para onde vai?</span>
+            <span className="text-emerald-400">Para onde vai?</span>
           </h1>
-          <p className="mt-6 text-lg text-gray-500 max-w-xl mx-auto leading-relaxed">
+          <p className="mt-6 text-lg text-gray-400 max-w-xl mx-auto leading-relaxed">
             Entre a creche, o supermercado, a farm&aacute;cia e as transfer&ecirc;ncias
             &mdash; o dinheiro desaparece. O BUDGY mostra-te exactamente para onde,
             sem teres de escrever nada &agrave; m&atilde;o.
@@ -43,12 +43,12 @@ export default function LandingPage() {
           <div className="mt-8">
             <Link
               href="/login"
-              className="inline-flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-lg px-8 py-4 rounded-2xl transition-all shadow-lg shadow-emerald-500/20"
+              className="inline-flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-lg px-8 py-4 rounded-2xl transition-all shadow-lg shadow-emerald-500/20"
             >
               Come&ccedil;ar agora &rarr;
             </Link>
           </div>
-          <p className="mt-4 text-sm text-gray-400">
+          <p className="mt-4 text-sm text-gray-500">
             Sem cart&atilde;o. Sem instala&ccedil;&atilde;o. Abre e usa.
           </p>
         </div>
@@ -192,16 +192,16 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-gray-100 px-4 py-8">
+      <footer className="bg-gray-900 border-t border-gray-800 px-4 py-8">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-sm font-bold text-gray-400">
+          <span className="text-sm font-bold text-gray-500">
             <span className="text-emerald-500">B</span>UDGY
           </span>
-          <div className="flex items-center gap-4 text-sm text-gray-400">
-            <Link href="/terms" className="hover:text-gray-600 transition-colors">Termos</Link>
-            <Link href="/privacy" className="hover:text-gray-600 transition-colors">Privacidade</Link>
+          <div className="flex items-center gap-4 text-sm text-gray-500">
+            <Link href="/terms" className="hover:text-gray-300 transition-colors">Termos</Link>
+            <Link href="/privacy" className="hover:text-gray-300 transition-colors">Privacidade</Link>
           </div>
-          <p className="text-xs text-gray-300">&copy; 2026 BUDGY</p>
+          <p className="text-xs text-gray-600">&copy; 2026 BUDGY</p>
         </div>
       </footer>
     </div>
