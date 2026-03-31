@@ -13,9 +13,10 @@ export default function LandingPage() {
       {/* Nav */}
       <nav className="sticky top-0 z-50 bg-gray-900/90 backdrop-blur-lg border-b border-gray-800">
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-14">
-          <span className="text-xl font-bold text-white">
-            <span className="text-emerald-400">B</span>UDGY
-          </span>
+          <div className="flex items-center gap-2">
+            <img src="/Budgy-favicon.jpeg" alt="BUDGY" className="w-8 h-8 rounded-lg" />
+            <span className="text-xl font-bold text-white">BUDGY</span>
+          </div>
           <Link
             href="/login"
             className="bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold px-5 py-2 rounded-xl transition-colors"
@@ -194,9 +195,10 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="bg-gray-900 border-t border-gray-800 px-4 py-8">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-sm font-bold text-gray-500">
-            <span className="text-emerald-500">B</span>UDGY
-          </span>
+          <div className="flex items-center gap-2">
+            <img src="/Budgy-favicon.jpeg" alt="BUDGY" className="w-6 h-6 rounded" />
+            <span className="text-sm font-bold text-gray-500">BUDGY</span>
+          </div>
           <div className="flex items-center gap-4 text-sm text-gray-500">
             <Link href="/terms" className="hover:text-gray-300 transition-colors">Termos</Link>
             <Link href="/privacy" className="hover:text-gray-300 transition-colors">Privacidade</Link>

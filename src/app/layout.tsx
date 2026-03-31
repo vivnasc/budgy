@@ -42,8 +42,8 @@ export default function RootLayout({
   return (
     <html lang="pt">
       <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+        <link rel="icon" href="/Budgy-favicon.jpeg" type="image/jpeg" />
+        <link rel="apple-touch-icon" href="/Budgy-favicon.jpeg" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
       <body className="font-sans">
