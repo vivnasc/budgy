@@ -263,7 +263,7 @@ export default async function DinheiroLanding() {
             <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center">
               <IconWallet className="w-4 h-4 text-white" />
             </div>
-            <span className="text-xl font-bold text-white">VIDA<span className="text-emerald-400">.DINHEIRO</span></span>
+            <span className="text-xl font-bold text-white">BUDGY</span>
           </div>
           <div className="hidden sm:flex items-center gap-8">
             <a href="#funcionalidades" className="text-sm text-white/60 hover:text-white transition-colors">Funcionalidades</a>
@@ -283,7 +283,7 @@ export default async function DinheiroLanding() {
           <div className="text-center max-w-4xl mx-auto">
             <div className="inline-flex items-center gap-2 bg-emerald-500/10 rounded-full px-4 py-2 mb-8 border border-emerald-500/20">
               <IconWallet className="w-4 h-4 text-emerald-400" />
-              <span className="text-sm font-medium text-emerald-300">Parte do ecossistema VIDA</span>
+              <span className="text-sm font-medium text-emerald-300">As tuas finanças, simplificadas</span>
             </div>
             <h1 className="text-4xl sm:text-5xl lg:text-7xl font-extrabold tracking-tight text-white leading-tight">
               Tuas finan&ccedil;as,<br /><span className="text-emerald-400">teus sonhos.</span>
@@ -452,15 +452,15 @@ export default async function DinheiroLanding() {
             <div className="flex flex-col items-center md:items-start gap-2">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center"><IconWallet className="w-3.5 h-3.5 text-white" /></div>
-                <span className="text-lg font-bold text-white">VIDA<span className="text-emerald-400">.DINHEIRO</span></span>
+                <span className="text-lg font-bold text-white">BUDGY</span>
               </div>
-              <p className="text-sm text-white/40">Parte do ecossistema VIDA</p>
+              <p className="text-sm text-white/40">As tuas finanças, simplificadas</p>
             </div>
             <div className="flex items-center gap-6 text-sm text-white/50">
               <Link href="/terms" className="hover:text-white transition-colors">Termos</Link>
               <Link href="/privacy" className="hover:text-white transition-colors">Privacidade</Link>
             </div>
-            <p className="text-sm text-white/30">&copy; 2025 VIDA. Todos os direitos reservados.</p>
+            <p className="text-sm text-white/30">&copy; 2026 BUDGY. Todos os direitos reservados.</p>
           </div>
         </div>
       </footer>

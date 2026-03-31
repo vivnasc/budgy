@@ -33,19 +33,18 @@ export default function PrivacyPage() {
           Politica de Privacidade
         </h1>
         <p className="mb-8 text-sm text-gray-500 dark:text-gray-400">
-          Ultima actualizacao: 27 de Fevereiro de 2026
+          Ultima actualizacao: 31 de Marco de 2026
         </p>
 
         <div className="space-y-8 text-gray-700 dark:text-gray-300">
           <section>
             <p className="leading-relaxed">
-              A VIDA compromete-se a proteger a privacidade dos seus
+              O BUDGY compromete-se a proteger a privacidade dos seus
               utilizadores. Esta Politica de Privacidade explica como recolhemos,
-              usamos e protegemos as suas informacoes pessoais quando utiliza
-              qualquer aplicacao do ecossistema VIDA — incluindo VIDA.FAMILIA,
-              VIDA.DINHEIRO, VIDA.LAR e VIDA.SAUDE — em conformidade com as
-              melhores praticas de proteccao de dados e a legislacao aplicavel,
-              incluindo principios da LGPD (Lei Geral de Proteccao de Dados).
+              usamos e protegemos as suas informacoes pessoais quando utiliza a
+              aplicacao BUDGY, em conformidade com as melhores praticas de
+              proteccao de dados e a legislacao aplicavel, incluindo principios
+              da LGPD (Lei Geral de Proteccao de Dados).
             </p>
           </section>
 
@@ -67,7 +66,7 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Dados de utilizacao:</strong> informacoes sobre como
-                interage com as nossas aplicacoes, incluindo paginas visitadas,
+                interage com a aplicacao, incluindo paginas visitadas,
                 funcionalidades utilizadas e tempo de sessao.
               </li>
               <li>
@@ -75,10 +74,9 @@ export default function PrivacyPage() {
                 sistema operativo, identificadores unicos e endereco IP.
               </li>
               <li>
-                <strong>Dados especificos da aplicacao:</strong> informacoes
-                financeiras (VIDA.DINHEIRO), dados de saude (VIDA.SAUDE), dados
-                familiares (VIDA.FAMILIA) e dados domesticos (VIDA.LAR),
-                conforme as funcionalidades que utilizar.
+                <strong>Dados financeiros:</strong> informacoes de transaccoes,
+                contas bancarias, categorias de despesas e receitas, orcamentos
+                e metas de poupanca, conforme as funcionalidades que utilizar.
               </li>
             </ul>
           </section>
@@ -93,7 +91,7 @@ export default function PrivacyPage() {
             <ul className="list-disc space-y-2 pl-6">
               <li>Fornecer, manter e melhorar os nossos servicos.</li>
               <li>
-                Personalizar a sua experiencia nas aplicacoes VIDA.
+                Personalizar a sua experiencia na aplicacao BUDGY.
               </li>
               <li>
                 Processar transaccoes e gerir a sua conta.
@@ -205,10 +203,10 @@ export default function PrivacyPage() {
               Para questoes relacionadas com a sua privacidade ou para exercer os
               seus direitos, entre em contacto connosco atraves do email{" "}
               <a
-                href="mailto:privacidade@vida.co.mz"
+                href="mailto:privacidade@budgy.app"
                 className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
               >
-                privacidade@vida.co.mz
+                privacidade@budgy.app
               </a>
               . Esta politica e regida pelas leis da Republica de Mocambique.
             </p>
@@ -216,7 +214,7 @@ export default function PrivacyPage() {
         </div>
 
         <div className="mt-12 border-t border-gray-200 pt-6 text-center text-sm text-gray-500 dark:border-gray-800 dark:text-gray-400">
-          <p>VIDA — Ecossistema digital para a vida moderna em Mocambique</p>
+          <p>&copy; 2026 BUDGY — Gestao financeira pessoal</p>
         </div>
       </div>
     </main>

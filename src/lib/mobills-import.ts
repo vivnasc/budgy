@@ -1,7 +1,7 @@
 /**
  * Mobills CSV/Excel Import Parser
  *
- * Parses exported data from Mobills app and maps to VIDA.DINHEIRO structure.
+ * Parses exported data from Mobills app and maps to BUDGY structure.
  * Mobills exports CSV with columns:
  * - Data (Date), Descrição (Description), Categoria (Category),
  *   Conta (Account), Valor (Amount), Tipo (Type), Estado (Status),
@@ -56,7 +56,7 @@ export interface ImportResult {
 // ─── Mobills Category Mapping ────────────────────────────────────────────────
 
 /**
- * Maps Mobills Portuguese categories to VIDA.DINHEIRO categories.
+ * Maps Mobills Portuguese categories to BUDGY categories.
  * Consolidates the user's many Mobills categories into cleaner groups.
  */
 const MOBILLS_CATEGORY_MAP: Record<string, string> = {
@@ -541,10 +541,10 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
 // ─── Smart Category Consolidation ────────────────────────────────────────────
 
 /**
- * The VIDA.DINHEIRO recommended categories.
+ * The BUDGY recommended categories.
  * Simplified from typical Mobills chaos (30+ categories) to clear groups.
  */
-export const VIDA_CATEGORIES = {
+export const BUDGY_CATEGORIES = {
   expense: [
     { name: "Alimentação", icon: "🛒", color: "#F59E0B" },
     { name: "Restaurantes", icon: "🍽️", color: "#EF4444" },
@@ -589,7 +589,7 @@ export const VIDA_CATEGORIES = {
 } as const;
 
 /**
- * Get all unique VIDA categories from an import result,
+ * Get all unique BUDGY categories from an import result,
  * showing which Mobills categories map to each.
  */
 export function getCategoryConsolidationPreview(

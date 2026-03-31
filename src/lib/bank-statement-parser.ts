@@ -28,7 +28,7 @@ export const SUPPORTED_BANK_FORMATS: BankInfo[] = [
   {
     id: "auto",
     name: "Detetar Automaticamente",
-    description: "O VIDA deteta o formato do ficheiro",
+    description: "O BUDGY deteta o formato do ficheiro",
     fileTypes: [".csv", ".xlsx"],
     icon: "sparkles",
   },

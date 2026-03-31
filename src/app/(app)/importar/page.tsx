@@ -22,7 +22,7 @@ import Link from "next/link";
 import type { ParsedSMS } from "@/lib/sms-parser";
 import type { ImportResult } from "@/lib/mobills-import";
 import { SUPPORTED_BANKS } from "@/lib/sms-parser";
-import { VIDA_CATEGORIES } from "@/lib/mobills-import";
+import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
 import { SUPPORTED_BANK_FORMATS, type BankFormat } from "@/lib/bank-statement-parser";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -240,7 +240,7 @@ function SMSTab() {
           <div>
             <h3 className="text-sm font-bold text-emerald-900">Como funciona</h3>
             <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
-              Cola aqui as mensagens SMS que recebes do teu banco. O VIDA lê automaticamente
+              Cola aqui as mensagens SMS que recebes do teu banco. O BUDGY lê automaticamente
               os valores, datas e tipo de transação. Tu só validas e corriges se necessário.
             </p>
           </div>
@@ -381,10 +381,10 @@ function PendingTransactionCard({
   };
 
   const allCategories = tx.type === "income"
-    ? VIDA_CATEGORIES.income
+    ? BUDGY_CATEGORIES.income
     : tx.type === "transfer"
-    ? VIDA_CATEGORIES.transfer
-    : VIDA_CATEGORIES.expense;
+    ? BUDGY_CATEGORIES.transfer
+    : BUDGY_CATEGORIES.expense;
 
   return (
     <div className={`rounded-2xl border p-4 transition-all ${statusStyles[tx.status]}`}>
@@ -573,7 +573,7 @@ function ImportTab() {
                 <h3 className="text-sm font-bold text-blue-900">Importar Extrato Bancário</h3>
                 <p className="text-xs text-blue-700 mt-1 leading-relaxed">
                   Carrega o extrato do teu banco (CPC, Moza Banco, Standard Bank)
-                  ou a exportação do Mobills. O VIDA deteta o formato, organiza
+                  ou a exportação do Mobills. O BUDGY deteta o formato, organiza
                   as categorias e importa tudo automaticamente.
                 </p>
               </div>
