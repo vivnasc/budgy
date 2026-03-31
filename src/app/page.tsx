@@ -132,7 +132,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {[
               { emoji: "\uD83D\uDCB0", title: "V\u00E1rias contas", desc: "Banco, M-Pesa, e-Mola, dinheiro f\u00EDsico" },
-              { emoji: "\uD83D\uDCE9", title: "Importa SMS", desc: "7 bancos suportados" },
+              { emoji: "\uD83D\uDCE9", title: "Importa SMS", desc: "Qualquer banco" },
               { emoji: "\uD83D\uDCC1", title: "Importa extratos", desc: "CSV e Excel" },
               { emoji: "\uD83D\uDCCA", title: "Or\u00E7amentos", desc: "Limites por categoria" },
               { emoji: "\uD83C\uDFAF", title: "Metas", desc: "Poupa com objectivo" },
