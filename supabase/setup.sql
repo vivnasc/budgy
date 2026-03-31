@@ -55,10 +55,10 @@ $$ LANGUAGE plpgsql;
 -- RLS for profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "profiles_select_own" ON public.profiles
-  FOR SELECT USING (auth.uid() = id);
-CREATE POLICY IF NOT EXISTS "profiles_update_own" ON public.profiles
-  FOR UPDATE USING (auth.uid() = id);
+DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
+CREATE POLICY "profiles_select_own" ON public.profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "profiles_update_own" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- ----------------------------------------------------------------------------
 -- 1. ENUM Types
@@ -280,48 +280,80 @@ ALTER TABLE money_schema.xitique_groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE money_schema.debt_records ENABLE ROW LEVEL SECURITY;
 
 -- Accounts
+DROP POLICY IF EXISTS "accounts_select_own" ON money_schema.accounts;
+DROP POLICY IF EXISTS "accounts_insert_own" ON money_schema.accounts;
+DROP POLICY IF EXISTS "accounts_update_own" ON money_schema.accounts;
+DROP POLICY IF EXISTS "accounts_delete_own" ON money_schema.accounts;
 CREATE POLICY "accounts_select_own" ON money_schema.accounts FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "accounts_insert_own" ON money_schema.accounts FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "accounts_update_own" ON money_schema.accounts FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "accounts_delete_own" ON money_schema.accounts FOR DELETE USING (auth.uid() = user_id);
 
 -- Categories (system + own)
+DROP POLICY IF EXISTS "categories_select" ON money_schema.categories;
+DROP POLICY IF EXISTS "categories_insert_own" ON money_schema.categories;
+DROP POLICY IF EXISTS "categories_update_own" ON money_schema.categories;
+DROP POLICY IF EXISTS "categories_delete_own" ON money_schema.categories;
 CREATE POLICY "categories_select" ON money_schema.categories FOR SELECT USING (is_system = true OR auth.uid() = user_id);
 CREATE POLICY "categories_insert_own" ON money_schema.categories FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "categories_update_own" ON money_schema.categories FOR UPDATE USING (auth.uid() = user_id AND is_system = false) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "categories_delete_own" ON money_schema.categories FOR DELETE USING (auth.uid() = user_id AND is_system = false);
 
 -- Transactions
+DROP POLICY IF EXISTS "transactions_select_own" ON money_schema.transactions;
+DROP POLICY IF EXISTS "transactions_insert_own" ON money_schema.transactions;
+DROP POLICY IF EXISTS "transactions_update_own" ON money_schema.transactions;
+DROP POLICY IF EXISTS "transactions_delete_own" ON money_schema.transactions;
 CREATE POLICY "transactions_select_own" ON money_schema.transactions FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "transactions_insert_own" ON money_schema.transactions FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "transactions_update_own" ON money_schema.transactions FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "transactions_delete_own" ON money_schema.transactions FOR DELETE USING (auth.uid() = user_id);
 
 -- Budgets
+DROP POLICY IF EXISTS "budgets_select_own" ON money_schema.budgets;
+DROP POLICY IF EXISTS "budgets_insert_own" ON money_schema.budgets;
+DROP POLICY IF EXISTS "budgets_update_own" ON money_schema.budgets;
+DROP POLICY IF EXISTS "budgets_delete_own" ON money_schema.budgets;
 CREATE POLICY "budgets_select_own" ON money_schema.budgets FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "budgets_insert_own" ON money_schema.budgets FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "budgets_update_own" ON money_schema.budgets FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "budgets_delete_own" ON money_schema.budgets FOR DELETE USING (auth.uid() = user_id);
 
 -- Goals
+DROP POLICY IF EXISTS "goals_select_own" ON money_schema.goals;
+DROP POLICY IF EXISTS "goals_insert_own" ON money_schema.goals;
+DROP POLICY IF EXISTS "goals_update_own" ON money_schema.goals;
+DROP POLICY IF EXISTS "goals_delete_own" ON money_schema.goals;
 CREATE POLICY "goals_select_own" ON money_schema.goals FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "goals_insert_own" ON money_schema.goals FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "goals_update_own" ON money_schema.goals FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "goals_delete_own" ON money_schema.goals FOR DELETE USING (auth.uid() = user_id);
 
 -- Funds
+DROP POLICY IF EXISTS "funds_select_own" ON money_schema.funds;
+DROP POLICY IF EXISTS "funds_insert_own" ON money_schema.funds;
+DROP POLICY IF EXISTS "funds_update_own" ON money_schema.funds;
+DROP POLICY IF EXISTS "funds_delete_own" ON money_schema.funds;
 CREATE POLICY "funds_select_own" ON money_schema.funds FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "funds_insert_own" ON money_schema.funds FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "funds_update_own" ON money_schema.funds FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "funds_delete_own" ON money_schema.funds FOR DELETE USING (auth.uid() = user_id);
 
 -- Xitique Groups
+DROP POLICY IF EXISTS "xitique_groups_select_own" ON money_schema.xitique_groups;
+DROP POLICY IF EXISTS "xitique_groups_insert_own" ON money_schema.xitique_groups;
+DROP POLICY IF EXISTS "xitique_groups_update_own" ON money_schema.xitique_groups;
+DROP POLICY IF EXISTS "xitique_groups_delete_own" ON money_schema.xitique_groups;
 CREATE POLICY "xitique_groups_select_own" ON money_schema.xitique_groups FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "xitique_groups_insert_own" ON money_schema.xitique_groups FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "xitique_groups_update_own" ON money_schema.xitique_groups FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "xitique_groups_delete_own" ON money_schema.xitique_groups FOR DELETE USING (auth.uid() = user_id);
 
 -- Debt Records
+DROP POLICY IF EXISTS "debt_records_select_own" ON money_schema.debt_records;
+DROP POLICY IF EXISTS "debt_records_insert_own" ON money_schema.debt_records;
+DROP POLICY IF EXISTS "debt_records_update_own" ON money_schema.debt_records;
+DROP POLICY IF EXISTS "debt_records_delete_own" ON money_schema.debt_records;
 CREATE POLICY "debt_records_select_own" ON money_schema.debt_records FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "debt_records_insert_own" ON money_schema.debt_records FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "debt_records_update_own" ON money_schema.debt_records FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
