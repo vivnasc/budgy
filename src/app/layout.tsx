@@ -13,8 +13,10 @@ export const metadata: Metadata = {
     "Gestão financeira pessoal inteligente. Controla receitas, despesas, orçamentos e metas financeiras.",
   manifest: "/manifest.json",
   icons: {
-    icon: "/Budgy-favicon.jpeg",
-    apple: "/Budgy-favicon.jpeg",
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
   appleWebApp: {
     capable: true,
@@ -46,8 +48,8 @@ export default function RootLayout({
   return (
     <html lang="pt">
       <head>
-        <link rel="icon" href="/Budgy-favicon.jpeg" type="image/jpeg" />
-        <link rel="apple-touch-icon" href="/Budgy-favicon.jpeg" />
+        <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
       <body className="font-sans">
