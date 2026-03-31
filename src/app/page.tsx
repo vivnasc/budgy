@@ -96,12 +96,12 @@ export default function LandingPage() {
                         <span className="text-white text-sm font-bold">BUDGY</span>
                       </div>
                       <p className="text-emerald-100 text-[10px]">Saldo Total</p>
-                      <p className="text-white text-2xl font-black">1.476.196 <span className="text-sm font-normal text-emerald-200">MZN</span></p>
+                      <p className="text-white text-2xl font-black">87.450 <span className="text-sm font-normal text-emerald-200">MZN</span></p>
                       <div className="flex items-center gap-1 mt-1">
                         <div className="w-3 h-3 bg-emerald-400 rounded-full flex items-center justify-center">
                           <span className="text-[6px] text-white">&uarr;</span>
                         </div>
-                        <span className="text-emerald-200 text-[10px]">+12.4% vs m&ecirc;s anterior</span>
+                        <span className="text-emerald-200 text-[10px]">+8.2% vs m&ecirc;s anterior</span>
                       </div>
                     </div>
                     {/* Accounts */}
@@ -110,17 +110,17 @@ export default function LandingPage() {
                         <div className="flex-1 bg-gray-800 rounded-xl p-3">
                           <div className="w-5 h-5 bg-blue-500 rounded-md mb-1.5" />
                           <p className="text-gray-400 text-[8px]">Banco</p>
-                          <p className="text-white text-xs font-bold">1.093.000</p>
+                          <p className="text-white text-xs font-bold">52.300</p>
                         </div>
                         <div className="flex-1 bg-gray-800 rounded-xl p-3">
                           <div className="w-5 h-5 bg-purple-500 rounded-md mb-1.5" />
-                          <p className="text-gray-400 text-[8px]">Moza</p>
-                          <p className="text-white text-xs font-bold">229.339</p>
+                          <p className="text-gray-400 text-[8px]">Conta 2</p>
+                          <p className="text-white text-xs font-bold">28.950</p>
                         </div>
                         <div className="flex-1 bg-gray-800 rounded-xl p-3">
                           <div className="w-5 h-5 bg-red-500 rounded-md mb-1.5" />
-                          <p className="text-gray-400 text-[8px]">M-Pesa</p>
-                          <p className="text-white text-xs font-bold">5.100</p>
+                          <p className="text-gray-400 text-[8px]">Carteira</p>
+                          <p className="text-white text-xs font-bold">6.200</p>
                         </div>
                       </div>
                       {/* Mini chart */}
@@ -172,12 +172,12 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="grid grid-cols-3 gap-8 text-center">
             <div>
-              <p className="text-3xl font-black text-gray-900">7</p>
-              <p className="text-sm text-gray-500 mt-1">bancos suportados</p>
-            </div>
-            <div>
               <p className="text-3xl font-black text-emerald-500">80+</p>
               <p className="text-sm text-gray-500 mt-1">regras de categoriza&ccedil;&atilde;o</p>
+            </div>
+            <div>
+              <p className="text-3xl font-black text-gray-900">10</p>
+              <p className="text-sm text-gray-500 mt-1">funcionalidades integradas</p>
             </div>
             <div>
               <p className="text-3xl font-black text-gray-900">2 min</p>
@@ -278,14 +278,17 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {[
               { emoji: "\uD83C\uDFE6", title: "V\u00E1rias contas", desc: "Bancos, carteiras m\u00F3veis, dinheiro", color: "bg-blue-50" },
-              { emoji: "\uD83D\uDCE9", title: "Importa SMS", desc: "Qualquer banco", color: "bg-green-50" },
-              { emoji: "\uD83D\uDCC1", title: "Importa extratos", desc: "CSV e Excel", color: "bg-amber-50" },
-              { emoji: "\uD83D\uDCCA", title: "Or\u00E7amentos", desc: "Limites por categoria", color: "bg-purple-50" },
-              { emoji: "\uD83C\uDFAF", title: "Metas", desc: "Poupa com objectivo", color: "bg-pink-50" },
-              { emoji: "\uD83D\uDC65", title: "Xitique", desc: "Poupan\u00E7a rotativa digital", color: "bg-orange-50" },
-              { emoji: "\uD83D\uDCB3", title: "D\u00EDvidas", desc: "Quem deve a quem", color: "bg-red-50" },
-              { emoji: "\uD83D\uDCC8", title: "Relat\u00F3rios", desc: "Gr\u00E1ficos visuais", color: "bg-indigo-50" },
-              { emoji: "\uD83D\uDE80", title: "R\u00E1pido", desc: "Configura em 2 minutos", color: "bg-teal-50" },
+              { emoji: "\uD83D\uDCE9", title: "Importa SMS", desc: "L\u00EA mensagens do banco automaticamente", color: "bg-green-50" },
+              { emoji: "\uD83D\uDCC1", title: "Importa extratos", desc: "CSV e Excel de qualquer banco", color: "bg-amber-50" },
+              { emoji: "\uD83D\uDCCA", title: "Or\u00E7amentos", desc: "Limites por categoria com alertas", color: "bg-purple-50" },
+              { emoji: "\uD83C\uDFAF", title: "Metas de poupan\u00E7a", desc: "V\u00EA o progresso para cada objectivo", color: "bg-pink-50" },
+              { emoji: "\uD83D\uDC65", title: "Xitique digital", desc: "Grupos, turnos e transpar\u00EAncia total", color: "bg-orange-50" },
+              { emoji: "\uD83D\uDCB3", title: "Controlo de d\u00EDvidas", desc: "Quem deve, a quem, com prazos", color: "bg-red-50" },
+              { emoji: "\uD83D\uDCC8", title: "Relat\u00F3rios visuais", desc: "Gr\u00E1ficos de gastos por categoria e m\u00EAs", color: "bg-indigo-50" },
+              { emoji: "\uD83C\uDF93", title: "Educa\u00E7\u00E3o financeira", desc: "Dicas e conte\u00FAdo para decidires melhor", color: "bg-cyan-50" },
+              { emoji: "\uD83D\uDD14", title: "Alertas inteligentes", desc: "Avisa quando te aproximas do limite", color: "bg-yellow-50" },
+              { emoji: "\uD83D\uDCF1", title: "Funciona no telem\u00F3vel", desc: "Abre no browser, sem instalar nada", color: "bg-teal-50" },
+              { emoji: "\uD83D\uDD04", title: "Importa do Mobills", desc: "Migra todo o teu hist\u00F3rico sem perder dados", color: "bg-rose-50" },
             ].map((f) => (
               <div key={f.title} className={`${f.color} rounded-2xl p-5 border border-white hover:shadow-lg hover:shadow-gray-900/5 transition-all duration-300 hover:-translate-y-0.5`}>
                 <div className="text-3xl mb-3">{f.emoji}</div>
