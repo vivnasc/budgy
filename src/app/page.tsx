@@ -288,7 +288,7 @@ export default function LandingPage() {
               { emoji: "\uD83C\uDF93", title: "Educa\u00E7\u00E3o financeira", desc: "Dicas e conte\u00FAdo para decidires melhor", color: "bg-cyan-50" },
               { emoji: "\uD83D\uDD14", title: "Alertas inteligentes", desc: "Avisa quando te aproximas do limite", color: "bg-yellow-50" },
               { emoji: "\uD83D\uDCF1", title: "Funciona no telem\u00F3vel", desc: "Abre no browser, sem instalar nada", color: "bg-teal-50" },
-              { emoji: "\uD83D\uDD04", title: "Importa do Mobills", desc: "Migra todo o teu hist\u00F3rico sem perder dados", color: "bg-rose-50" },
+              { emoji: "\uD83D\uDD04", title: "Migra de outra app", desc: "Importa todo o teu hist\u00F3rico sem perder dados", color: "bg-rose-50" },
             ].map((f) => (
               <div key={f.title} className={`${f.color} rounded-2xl p-5 border border-white hover:shadow-lg hover:shadow-gray-900/5 transition-all duration-300 hover:-translate-y-0.5`}>
                 <div className="text-3xl mb-3">{f.emoji}</div>

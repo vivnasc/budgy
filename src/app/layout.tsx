@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   description:
     "Gestão financeira pessoal inteligente. Controla receitas, despesas, orçamentos e metas financeiras.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/Budgy-favicon.jpeg",
+    apple: "/Budgy-favicon.jpeg",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

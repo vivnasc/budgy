@@ -488,7 +488,7 @@ function PendingTransactionCard({
   );
 }
 
-// ─── Import Tab (Bank Statements & Mobills) ─────────────────────────────────
+// ─── Import Tab (Bank Statements & Other Apps) ─────────────────────────────
 
 function ImportTab() {
   const [step, setStep] = useState<ImportStep>("upload");
@@ -572,7 +572,7 @@ function ImportTab() {
               <div>
                 <h3 className="text-sm font-bold text-blue-900">Importar Extrato Bancário</h3>
                 <p className="text-xs text-blue-700 mt-1 leading-relaxed">
-                  Carrega o extrato do teu banco ou a exportação do Mobills.
+                  Carrega o extrato do teu banco ou a exportação de outra app.
                   O BUDGY deteta o formato, organiza as categorias e importa tudo automaticamente.
                 </p>
               </div>
@@ -670,7 +670,7 @@ function ImportTab() {
               <div className="flex items-start gap-3">
                 <span className="text-base">📊</span>
                 <span className="text-xs text-gray-600">
-                  Mobills → Definições → Exportar dados (Excel)
+                  Outra app → Definições → Exportar dados (Excel)
                 </span>
               </div>
             </div>
@@ -748,7 +748,7 @@ function ImportPreview({
             <h3 className="text-sm font-bold text-gray-900">Resumo da importação</h3>
             {detectedFormat && detectedFormat !== "auto" && (
               <span className="text-[10px] font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full uppercase">
-                {detectedFormat === "cpc" ? "CPC" : detectedFormat === "moza" ? "Moza Banco" : detectedFormat === "standard-bank" ? "Standard Bank" : "Mobills"}
+                {detectedFormat === "cpc" ? "CSV (Inglês)" : detectedFormat === "moza" ? "CSV (Português)" : detectedFormat === "standard-bank" ? "Excel" : "App externa"}
               </span>
             )}
           </div>
@@ -804,7 +804,7 @@ function ImportPreview({
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
         <h3 className="text-sm font-bold text-gray-900 mb-1">Categorias organizadas</h3>
         <p className="text-xs text-gray-500 mb-4">
-          As tuas {Object.keys(result.summary.categoryCounts).length} categorias do Mobills foram organizadas automaticamente.
+          As tuas {Object.keys(result.summary.categoryCounts).length} categorias foram organizadas automaticamente.
         </p>
 
         <div className="space-y-2">

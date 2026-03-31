@@ -34,8 +34,8 @@ export const SUPPORTED_BANK_FORMATS: BankInfo[] = [
   },
   {
     id: "mobills",
-    name: "Mobills",
-    description: "Exportação do app Mobills",
+    name: "Outra app",
+    description: "Exportação de outra app de finanças",
     fileTypes: [".csv", ".xlsx"],
     icon: "smartphone",
   },
