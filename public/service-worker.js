@@ -13,6 +13,7 @@ const PRECACHE_URLS = [
   "/metas",
   "/manifest.json",
   "/favicon.svg",
+  "/budgy-logo.webp",
   "/icons/icon-192x192.png",
   "/icons/icon-512x512.png",
 ];

@@ -45,6 +45,22 @@ async function createSupabaseMiddlewareClient(request: NextRequest) {
 
 export function createMiddleware() {
   return async function middleware(request: NextRequest): Promise<NextResponse> {
+    const pathname = request.nextUrl.pathname;
+
+    // Public routes: skip Supabase auth check entirely (zero origin transfer)
+    const isPublicRoute =
+      pathname === "/" ||
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/signup") ||
+      pathname.startsWith("/auth") ||
+      pathname.startsWith("/api/auth") ||
+      pathname.startsWith("/terms") ||
+      pathname.startsWith("/privacy");
+
+    if (isPublicRoute) {
+      return NextResponse.next({ request });
+    }
+
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -56,25 +72,8 @@ export function createMiddleware() {
     const { user, supabaseResponse } =
       await createSupabaseMiddlewareClient(request);
 
-    const pathname = request.nextUrl.pathname;
-
-    const isPublicRoute =
-      pathname.startsWith("/login") ||
-      pathname.startsWith("/signup") ||
-      pathname.startsWith("/auth") ||
-      pathname.startsWith("/api/auth");
-
-    // Authenticated user on login → redirect to dashboard
-    if (user && pathname.startsWith("/login")) {
-      const redirectTo = request.nextUrl.searchParams.get("redirect") || "/painel";
-      const url = request.nextUrl.clone();
-      url.pathname = redirectTo;
-      url.searchParams.delete("redirect");
-      return NextResponse.redirect(url);
-    }
-
     // Unauthenticated user on protected route → redirect to login
-    if (!user && !isPublicRoute) {
+    if (!user) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       if (pathname !== "/") {

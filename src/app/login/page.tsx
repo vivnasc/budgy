@@ -78,7 +78,7 @@ export default function LoginPage() {
       appTagline="As tuas finanças, simplificadas"
       appLogo={
         <div className="flex flex-col items-center gap-2 mb-2">
-          <img src="/Budgy-favicon.jpeg" alt="BUDGY" className="w-16 h-16 rounded-2xl shadow-lg" />
+          <img src="/budgy-logo.webp" alt="BUDGY" className="w-16 h-16 rounded-2xl shadow-lg" />
           <span className="text-2xl font-black text-emerald-600">BUDGY</span>
         </div>
       }

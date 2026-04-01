@@ -145,7 +145,7 @@ export default function DashboardPage() {
       <header className="bg-gradient-to-br from-primary-500 to-primary-700 text-white px-4 pt-12 pb-6 rounded-b-3xl">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <img src="/Budgy-favicon.jpeg" alt="BUDGY" className="w-10 h-10 rounded-xl shadow-lg" />
+            <img src="/budgy-logo.webp" alt="BUDGY" className="w-10 h-10 rounded-xl shadow-lg" />
             <div>
               <p className="text-primary-100 text-sm">Ol&aacute;, bem-vindo</p>
               <h1 className="text-xl font-bold">BUDGY</h1>
