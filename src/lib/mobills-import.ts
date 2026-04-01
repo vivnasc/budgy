@@ -441,7 +441,8 @@ function parseMobillsAmount(value: string): number {
   }
 
   const amount = parseFloat(cleaned);
-  return isNaN(amount) ? 0 : Math.abs(amount);
+  if (isNaN(amount)) return 0;
+  return isNegative ? -amount : amount;
 }
 
 function parseMobillsDate(dateStr: string): string {
