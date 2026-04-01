@@ -10,6 +10,8 @@
  * Also handles Mobills Excel (.xlsx) format with the same columns.
  */
 
+import { autoCategorize } from "./auto-categorize";
+
 export interface MobillsTransaction {
   date: string;
   description: string;
@@ -301,6 +303,119 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "cosmetico": "Beleza & Cuidados",
   "higiene": "Beleza & Cuidados",
 
+  // ─── Mobills default categories (built-in) ───
+  "food": "Alimentação",
+  "groceries": "Alimentação",
+  "meals": "Restaurantes",
+  "snacks": "Restaurantes",
+  "drinks": "Restaurantes",
+  "beverage": "Restaurantes",
+  "beverages": "Restaurantes",
+  "dining": "Restaurantes",
+  "dining out": "Restaurantes",
+  "eating out": "Restaurantes",
+  "housing": "Casa",
+  "rent": "Casa",
+  "mortgage": "Casa",
+  "home": "Casa",
+  "household": "Casa",
+  "furniture": "Casa",
+  "appliances": "Casa",
+  "utilities": "Contas & Serviços",
+  "bills": "Contas & Serviços",
+  "electricity": "Contas & Serviços",
+  "water": "Contas & Serviços",
+  "insurance": "Seguros",
+  "seguro": "Seguros",
+  "seguros": "Seguros",
+  "life insurance": "Seguros",
+  "health insurance": "Seguros",
+  "car insurance": "Seguros",
+  "medical": "Saúde",
+  "medicine": "Saúde",
+  "doctor": "Saúde",
+  "pharmacy": "Saúde",
+  "wellness": "Saúde",
+  "sports": "Lazer",
+  "personal care": "Beleza & Cuidados",
+  "haircut": "Beleza & Cuidados",
+  "salon": "Beleza & Cuidados",
+  "clothes": "Roupa",
+  "shoes": "Roupa",
+  "accessories": "Roupa",
+  "toys": "Família",
+  "kids": "Família",
+  "children": "Família",
+  "baby": "Família",
+  "daycare": "Família",
+  "child care": "Família",
+  "school": "Educação",
+  "tuition": "Educação",
+  "books": "Educação",
+  "courses": "Educação",
+  "training": "Educação",
+  "fuel": "Combustível",
+  "gas station": "Combustível",
+  "parking": "Transporte",
+  "car maintenance": "Automóvel",
+  "car repair": "Automóvel",
+  "mechanic": "Automóvel",
+  "car wash": "Automóvel",
+  "vehicle": "Automóvel",
+  "travel": "Viagens",
+  "flight": "Viagens",
+  "flights": "Viagens",
+  "accommodation": "Viagens",
+  "vacation": "Viagens",
+  "charity": "Doações",
+  "donation": "Doações",
+  "tithe": "Doações",
+  "church": "Doações",
+  "taxes": "Taxas Bancárias",
+  "fees": "Taxas Bancárias",
+  "bank fees": "Taxas Bancárias",
+  "bank charges": "Taxas Bancárias",
+  "interest": "Dívidas",
+  "loan payment": "Dívidas",
+  "credit card": "Dívidas",
+  "debt": "Dívidas",
+  "subscription": "Subscrições",
+  "subscriptions": "Subscrições",
+  "membership": "Subscrições",
+  "phone": "Comunicação",
+  "mobile": "Comunicação",
+  "cellphone": "Comunicação",
+  "cable": "Comunicação",
+  "movies": "Lazer",
+  "music": "Lazer",
+  "games": "Lazer",
+  "hobbies": "Lazer",
+  "hobby": "Lazer",
+  "pet": "Animais",
+  "veterinary": "Animais",
+  "vet": "Animais",
+  "wages": "Salário",
+  "paycheck": "Salário",
+  "savings": "Poupança",
+  "refund": "Reembolso",
+  "reimbursement": "Reembolso",
+  "transfer": "Transferência",
+  "wire transfer": "Transferência",
+  "atm": "Levantamento",
+  "withdrawal": "Levantamento",
+  "levantamento": "Levantamento",
+  "deposit": "Depósito",
+  "deposito": "Depósito",
+  "depósito": "Depósito",
+  "electronics": "Compras",
+  "technology": "Compras",
+  "gadgets": "Compras",
+  "online shopping": "Compras",
+  "miscellaneous": "Outros",
+  "general": "Outros",
+  "uncategorized": "Outros",
+  "sem categoria": "Outros",
+
   // Genérico
   "others": "Outros",
   "outro": "Outros",
@@ -321,7 +436,20 @@ function normalizeForMapping(text: string): string {
     .trim();
 }
 
-function mapCategory(mobillsCategory: string, subcategory?: string): { mapped: string; needsReview: boolean } {
+/**
+ * Use the auto-categorize engine (80+ merchant rules) to categorize by description.
+ * Returns the category name or null if no match found.
+ */
+function autoCategorizeFromDescription(description: string): string | null {
+  const result = autoCategorize(description, "expense");
+  // Only use if confidence is reasonable (system rules match)
+  if (result.confidence >= 0.7 && result.category !== "Outros" && result.category !== "Outro Rendimento") {
+    return result.category;
+  }
+  return null;
+}
+
+function mapCategory(mobillsCategory: string, subcategory?: string, description?: string): { mapped: string; needsReview: boolean } {
   // Try category first, then subcategory, then combined
   const candidates = [
     mobillsCategory,
@@ -346,6 +474,14 @@ function mapCategory(mobillsCategory: string, subcategory?: string): { mapped: s
       if (normalized.length >= 3 && key.includes(normalized)) {
         return { mapped: value, needsReview: false };
       }
+    }
+  }
+
+  // Fallback: try auto-categorize from description (merchant name matching)
+  if (description && description.length > 0) {
+    const result = autoCategorizeFromDescription(description);
+    if (result) {
+      return { mapped: result, needsReview: false };
     }
   }
 
@@ -592,7 +728,7 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       const type = row.type ? parseTransactionType(row.type) : (rawAmount < 0 ? "expense" : "income");
       const amount = Math.abs(rawAmount);
       const originalCategory = row.category || "Outros";
-      const { mapped, needsReview } = mapCategory(originalCategory, row.subcategory);
+      const { mapped, needsReview } = mapCategory(originalCategory, row.subcategory, row.description);
 
       // Track category mapping
       if (originalCategory !== mapped) {
@@ -677,7 +813,10 @@ export const BUDGY_CATEGORIES = {
     { name: "Animais", icon: "🐾", color: "#78716C" },
     { name: "Doações", icon: "🤝", color: "#F43F5E" },
     { name: "Taxas Bancárias", icon: "🏦", color: "#64748B" },
+    { name: "Seguros", icon: "🛡️", color: "#475569" },
     { name: "Dívidas", icon: "💳", color: "#DC2626" },
+    { name: "Levantamento", icon: "🏧", color: "#F59E0B" },
+    { name: "Roupa", icon: "👗", color: "#E879F9" },
     { name: "Outros", icon: "📦", color: "#94A3B8" },
   ],
   income: [
