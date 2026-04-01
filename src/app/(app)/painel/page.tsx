@@ -25,7 +25,6 @@ import {
 import { BalanceCard } from "@/components/balance-card";
 import { TransactionItem } from "@/components/transaction-item";
 import { BudgetProgress } from "@/components/budget-progress";
-import { BottomNav } from "@/components/bottom-nav";
 import { useDashboard } from "@/hooks/use-supabase-data";
 import type { Account, Transaction, Budget, DebtRecord, XitiqueGroup } from "@/lib/supabase/types";
 
@@ -128,7 +127,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center py-20">
         <div className="animate-pulse text-center">
           <div className="w-12 h-12 bg-primary-200 rounded-full mx-auto mb-3" />
           <p className="text-sm text-gray-400">A carregar...</p>
@@ -140,7 +139,7 @@ export default function DashboardPage() {
   const isEmpty = accounts.length === 0 && transactions.length === 0;
 
   return (
-    <div className="min-h-screen pb-4">
+    <div className="pb-4">
       {/* Header */}
       <header className="bg-gradient-to-br from-primary-500 to-primary-700 text-white px-4 pt-12 pb-6 rounded-b-3xl">
         <div className="flex items-center justify-between mb-6">
@@ -409,7 +408,6 @@ export default function DashboardPage() {
         )}
       </main>
 
-      <BottomNav />
     </div>
   );
 }

@@ -313,23 +313,44 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "ajuste": "Ajuste",
 };
 
-function mapCategory(mobillsCategory: string): { mapped: string; needsReview: boolean } {
-  const normalized = mobillsCategory.toLowerCase().trim();
+function normalizeForMapping(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
 
-  // Direct match
-  if (MOBILLS_CATEGORY_MAP[normalized]) {
-    return { mapped: MOBILLS_CATEGORY_MAP[normalized], needsReview: false };
-  }
+function mapCategory(mobillsCategory: string, subcategory?: string): { mapped: string; needsReview: boolean } {
+  // Try category first, then subcategory, then combined
+  const candidates = [
+    mobillsCategory,
+    subcategory,
+    subcategory ? `${mobillsCategory}: ${subcategory}` : undefined,
+  ].filter((c): c is string => !!c && c.length > 0);
 
-  // Partial match - check if any key is contained in the category name
-  for (const [key, value] of Object.entries(MOBILLS_CATEGORY_MAP)) {
-    if (normalized.includes(key) || key.includes(normalized)) {
-      return { mapped: value, needsReview: false };
+  for (const candidate of candidates) {
+    const normalized = normalizeForMapping(candidate);
+
+    // Direct match
+    if (MOBILLS_CATEGORY_MAP[normalized]) {
+      return { mapped: MOBILLS_CATEGORY_MAP[normalized], needsReview: false };
+    }
+
+    // Partial match - check if any key is contained in the category name
+    // Only match if key is at least 3 chars to avoid false positives
+    for (const [key, value] of Object.entries(MOBILLS_CATEGORY_MAP)) {
+      if (key.length >= 3 && normalized.includes(key)) {
+        return { mapped: value, needsReview: false };
+      }
+      if (normalized.length >= 3 && key.includes(normalized)) {
+        return { mapped: value, needsReview: false };
+      }
     }
   }
 
-  // No match found — needs review
-  return { mapped: mobillsCategory, needsReview: true };
+  // No match found — default to Outros
+  return { mapped: "Outros", needsReview: true };
 }
 
 // ─── CSV Parser ──────────────────────────────────────────────────────────────
@@ -367,6 +388,8 @@ function detectSeparator(headerLine: string): string {
 
 function normalizeHeader(header: string): string {
   return header
+    .replace(/^\uFEFF/, "")  // Strip BOM
+    .replace(/^["']|["']$/g, "")  // Strip quotes
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -498,8 +521,24 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
     };
   }
 
+  // Strip BOM from first line
+  if (lines[0]) {
+    lines[0] = lines[0].replace(/^\uFEFF/, "");
+  }
+
+  // Find header row (may not be the first row - skip metadata rows)
+  let headerIndex = 0;
+  for (let i = 0; i < Math.min(10, lines.length); i++) {
+    const line = lines[i]!.toLowerCase();
+    if ((line.includes("data") || line.includes("date")) &&
+        (line.includes("descri") || line.includes("categ") || line.includes("valor") || line.includes("amount"))) {
+      headerIndex = i;
+      break;
+    }
+  }
+
   // Detect separator and parse headers
-  const firstLine = lines[0]!;
+  const firstLine = lines[headerIndex]!;
   const separator = detectSeparator(firstLine);
   const headers = firstLine.split(separator === ";" ? ";" : /,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
   const headerMap = mapHeaders(headers);
@@ -529,8 +568,8 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
   let minDate = "";
   let maxDate = "";
 
-  // Parse data rows
-  for (let i = 1; i < lines.length; i++) {
+  // Parse data rows (start after header row)
+  for (let i = headerIndex + 1; i < lines.length; i++) {
     try {
       const line = lines[i]!;
       const values = separator === ";"
@@ -553,7 +592,7 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       const type = row.type ? parseTransactionType(row.type) : (rawAmount < 0 ? "expense" : "income");
       const amount = Math.abs(rawAmount);
       const originalCategory = row.category || "Outros";
-      const { mapped, needsReview } = mapCategory(originalCategory);
+      const { mapped, needsReview } = mapCategory(originalCategory, row.subcategory);
 
       // Track category mapping
       if (originalCategory !== mapped) {
@@ -595,7 +634,7 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
 
   return {
     success: imported.length > 0,
-    total: lines.length - 1,
+    total: lines.length - headerIndex - 1,
     imported,
     skipped,
     errors,
