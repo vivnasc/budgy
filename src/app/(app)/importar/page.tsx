@@ -801,30 +801,66 @@ function ImportPreview({
         )}
       </div>
 
-      {/* Categories organized — separated by type */}
+      {/* Categories organized — with subcategories and mapping detail */}
       {(() => {
         const expenseNames = new Set<string>(BUDGY_CATEGORIES.expense.map((c) => c.name as string));
         const incomeNames = new Set<string>(BUDGY_CATEGORIES.income.map((c) => c.name as string));
+
+        // Build category → subcategory breakdown from imported transactions
+        const categoryBreakdown: Record<string, Record<string, { count: number; originals: Set<string> }>> = {};
+        for (const tx of result.imported) {
+          const cat = tx.mappedCategory;
+          const sub = tx.mappedSubcategory || "Geral";
+          if (!categoryBreakdown[cat]) categoryBreakdown[cat] = {};
+          if (!categoryBreakdown[cat][sub]) categoryBreakdown[cat][sub] = { count: 0, originals: new Set() };
+          categoryBreakdown[cat][sub].count++;
+          if (tx.originalCategory && tx.originalCategory !== "Outros") {
+            categoryBreakdown[cat][sub].originals.add(tx.originalCategory);
+          }
+        }
+
         const allCats = Object.entries(result.summary.categoryCounts).sort((a, b) => b[1] - a[1]);
         const expenses = allCats.filter(([cat]) => expenseNames.has(cat) || (!incomeNames.has(cat) && cat !== "Transferência"));
         const income = allCats.filter(([cat]) => incomeNames.has(cat));
         const totalTx = result.imported.length;
 
-        const renderBars = (cats: [string, number][], color: string) => (
-          <div className="space-y-2">
+        const renderCategoryGroup = (cats: [string, number][], barColor: string) => (
+          <div className="space-y-3">
             {cats.map(([category, count]) => {
               const pct = Math.round((count / totalTx) * 100);
+              const subs = categoryBreakdown[category] || {};
+              const subEntries = Object.entries(subs).sort((a, b) => b[1].count - a[1].count);
+
               return (
-                <div key={category} className="flex items-center gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-gray-700">{category}</span>
-                      <span className="text-xs text-gray-400">{count}x</span>
-                    </div>
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full ${color} rounded-full`} style={{ width: `${Math.max(pct, 2)}%` }} />
-                    </div>
+                <div key={category} className="border border-gray-100 rounded-xl p-3">
+                  {/* Category header with bar */}
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-gray-800">{category}</span>
+                    <span className="text-xs text-gray-400">{count}x</span>
                   </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-2">
+                    <div className={`h-full ${barColor} rounded-full`} style={{ width: `${Math.max(pct, 2)}%` }} />
+                  </div>
+
+                  {/* Subcategories detail */}
+                  {subEntries.length > 0 && (
+                    <div className="space-y-1 ml-2 border-l-2 border-gray-100 pl-3">
+                      {subEntries.map(([sub, data]) => (
+                        <div key={sub} className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <span className="text-[11px] text-gray-600">{sub}</span>
+                            {data.originals.size > 0 && (
+                              <span className="text-[10px] text-gray-400 ml-1">
+                                ← {Array.from(data.originals).slice(0, 3).join(", ")}
+                                {data.originals.size > 3 && ` +${data.originals.size - 3}`}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-gray-400 ml-2 flex-shrink-0">{data.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -837,14 +873,14 @@ function ImportPreview({
               <div className="bg-white rounded-2xl border border-gray-100 p-5">
                 <h3 className="text-sm font-bold text-gray-900 mb-1">Despesas</h3>
                 <p className="text-xs text-gray-500 mb-3">{expenses.length} categorias organizadas automaticamente</p>
-                {renderBars(expenses, "bg-red-400")}
+                {renderCategoryGroup(expenses, "bg-red-400")}
               </div>
             )}
             {income.length > 0 && (
               <div className="bg-white rounded-2xl border border-gray-100 p-5">
                 <h3 className="text-sm font-bold text-gray-900 mb-1">Rendimentos</h3>
                 <p className="text-xs text-gray-500 mb-3">{income.length} categorias</p>
-                {renderBars(income, "bg-emerald-400")}
+                {renderCategoryGroup(income, "bg-emerald-400")}
               </div>
             )}
           </>
