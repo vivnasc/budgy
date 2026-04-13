@@ -71,9 +71,7 @@ export interface ImportResult {
  * Consolidates the user's many Mobills categories into cleaner groups.
  */
 const MOBILLS_CATEGORY_MAP: Record<string, string> = {
-  // ─── Real Mobills categories from user data ───
-
-  // Alimentação & Restaurantes
+  // ─── Alimentação (subcategorias separadas) ───
   "supermercado": "Alimentação",
   "talho": "Alimentação",
   "mercearia": "Alimentação",
@@ -81,195 +79,37 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "alimentacao": "Alimentação",
   "comida": "Alimentação",
   "padaria": "Alimentação",
+
+  // ─── Restaurantes ───
   "restaurantes": "Restaurantes",
   "restaurante": "Restaurantes",
   "almoços de família": "Restaurantes",
-  "bottle store & smoke": "Lazer",
   "café": "Restaurantes",
   "lanche": "Restaurantes",
   "delivery": "Restaurantes",
   "fast food": "Restaurantes",
 
-  // Casa & Contas
-  "home bills": "Contas & Serviços",
-  "home clothes & dish": "Casa",
-  "house appliances & furniture": "Casa",
-  "garden": "Casa",
-  "manutenção piscina": "Casa",
-  "obras e reparações": "Casa",
-  "katembe home project": "Casa",
-  "aquisição de habitação": "Casa",
-
-  // Saúde & Beleza & Fitness
-  "health": "Saúde",
-  "beauty": "Beleza & Cuidados",
-  "fitness": "Saúde",
-
-  // Educação
-  "education": "Educação",
-  "7ecos books": "Educação",
-  "writing": "Educação",
-  "hobbies: escritora & afins": "Lazer",
-
-  // Família & Filhos
-  "baby cris": "Família",
-  "kidz toys and fun": "Família",
-  "ajudas familiares": "Transferências",
-  "aniversários": "Lazer",
-  "feriados e festas": "Lazer",
-  "filhos": "Família",
-  "família": "Família",
-  "familia": "Família",
-  "crianças": "Família",
-  "criancas": "Família",
-  "gift": "Lazer",
-  "gifts": "Lazer",
-
-  // Transporte & Viatura
-  "transportation": "Transporte",
-  "aquisição de viatura": "Automóvel",
-  "transporte": "Transporte",
-  "combustível": "Combustível",
-  "combustivel": "Combustível",
-  "gasolina": "Combustível",
-  "gasóleo": "Combustível",
-  "uber": "Transporte",
-  "bolt": "Transporte",
-  "taxi": "Transporte",
-  "táxi": "Transporte",
-  "chapa": "Transporte",
-  "estacionamento": "Transporte",
-  "manutenção veículo": "Automóvel",
-  "manutenção veiculo": "Automóvel",
-  "seguro auto": "Automóvel",
-  "carro": "Automóvel",
-  "automóvel": "Automóvel",
-
-  // Viagens
-  "holidays": "Viagens",
-  "viagens despesas": "Viagens",
-  "viagens serviço": "Viagens",
-  "subsídio viagem": "Viagens",
-  "viagem": "Viagens",
-  "viagens": "Viagens",
-  "férias": "Viagens",
-  "ferias": "Viagens",
-  "hotel": "Viagens",
-
-  // Pessoal & Roupa
-  "clothing": "Roupa",
-  "roupa": "Roupa",
-  "vestuário": "Roupa",
-  "vestuario": "Roupa",
-  "despesas pessoais bruno": "Pessoal",
-  "pessoal": "Pessoal",
-  "personal gadgets": "Compras",
-  "espiritualidade": "Pessoal",
-  "documentos id": "Pessoal",
-
-  // Subscrições & Digital
-  "digital apps & services": "Subscrições",
-  "apple bills": "Subscrições",
-  "apple bill": "Subscrições",
-  "mensalidades coachme": "Subscrições",
-  "subscrição": "Subscrições",
-  "subscricao": "Subscrições",
-  "assinatura": "Subscrições",
-  "netflix": "Subscrições",
-  "spotify": "Subscrições",
-  "streaming": "Subscrições",
-
-  // Lazer & Entretenimento
+  // ─── Lazer & Entretenimento ───
+  "bottle store & smoke": "Lazer",
   "entertainment": "Lazer",
   "lazer": "Lazer",
   "entretenimento": "Lazer",
   "cinema": "Lazer",
   "diversão": "Lazer",
-  "levantamentos fim de semana": "Levantamentos",
+  "aniversários": "Lazer",
+  "feriados e festas": "Lazer",
+  "gift": "Lazer",
+  "gifts": "Lazer",
+  "hobbies: escritora & afins": "Pessoal",
 
-  // Animais
-  "pets": "Animais",
-  "animais": "Animais",
-
-  // Doações & Ofertas
-  "donations": "Doações",
-  "doação": "Doações",
-  "doacao": "Doações",
-  "igreja": "Doações",
-  "dízimo": "Doações",
-  "dizimo": "Doações",
-  "caridade": "Doações",
-  "oferta": "Doações",
-
-  // Trabalho & Negócio
-  "employees wages": "Negócio",
-  "sete-ecos project": "Negócio",
-
-  // Dívidas & Empréstimos
-  "loan": "Dívidas",
-  "empréstimos bancários": "Dívidas",
-  "crédito fml": "Dívidas",
-  "moza credito": "Dívidas",
-  "reembolso lomesio": "Reembolso",
-  "empréstimo": "Dívidas",
-  "emprestimo": "Dívidas",
-  "dívida": "Dívidas",
-  "divida": "Dívidas",
-  "cartão crédito": "Dívidas",
-  "juros": "Dívidas",
-
-  // Taxas Bancárias
-  "comissões bancárias": "Taxas Bancárias",
-  "taxa": "Taxas Bancárias",
-  "taxa bancária": "Taxas Bancárias",
-  "comissão": "Taxas Bancárias",
-
-  // Contas & Serviços
-  "contas": "Contas & Serviços",
-  "água": "Contas & Serviços",
-  "agua": "Contas & Serviços",
-  "electricidade": "Contas & Serviços",
-  "luz": "Contas & Serviços",
-  "gás": "Contas & Serviços",
-  "gas": "Contas & Serviços",
-  "internet": "Comunicação",
-  "telefone": "Comunicação",
-  "telemóvel": "Comunicação",
-  "telemovel": "Comunicação",
-  "comunicação": "Comunicação",
-  "comunicacao": "Comunicação",
-  "tv": "Comunicação",
-
-  // Rendimentos
-  "salary": "Salário",
-  "salário": "Salário",
-  "salario": "Salário",
-  "vencimento": "Salário",
-  "ordenado": "Salário",
-  "bruno income": "Freelance",
-  "vendas": "Freelance",
-  "award": "Bónus",
-  "freelance": "Freelance",
-  "bónus": "Bónus",
-  "bonus": "Bónus",
-  "rendimento": "Outro Rendimento",
-  "renda (recebida)": "Rendimento Passivo",
-  "dividendos": "Rendimento Passivo",
-  "reembolso": "Reembolso",
-  "investimento": "Investimento",
-  "investimentos": "Investimento",
-  "poupança": "Poupança",
-  "poupanca": "Poupança",
-  "xitique": "Xitique",
-
-  // Compras
-  "compras": "Compras",
-  "shopping": "Compras",
-  "electrónica": "Compras",
-  "electronica": "Compras",
-  "tecnologia": "Compras",
-
-  // Casa genérico
+  // ─── Casa & Domésticos ───
+  "home bills": "Casa",
+  "home clothes & dish": "Casa",
+  "house appliances & furniture": "Casa",
+  "garden": "Casa",
+  "manutenção piscina": "Casa",
+  "obras e reparações": "Casa",
+  "employees wages": "Casa",
   "casa": "Casa",
   "moradia": "Casa",
   "renda": "Casa",
@@ -283,7 +123,14 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "empregada": "Casa",
   "doméstica": "Casa",
 
-  // Saúde genérico
+  // ─── Investimento (imóvel, viatura — NÃO é despesa corrente) ───
+  "katembe home project": "Investimento",
+  "aquisição de habitação": "Investimento",
+  "aquisição de viatura": "Investimento",
+
+  // ─── Saúde ───
+  "health": "Saúde",
+  "fitness": "Saúde",
   "saúde": "Saúde",
   "saude": "Saúde",
   "farmácia": "Saúde",
@@ -297,23 +144,178 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "ginasio": "Saúde",
   "gym": "Saúde",
 
-  // Educação genérico
-  "educação": "Educação",
-  "educacao": "Educação",
-  "escola": "Educação",
-  "universidade": "Educação",
-  "curso": "Educação",
-  "livros": "Educação",
-  "formação": "Educação",
-  "formacao": "Educação",
-  "propina": "Educação",
+  // ─── Beleza & Cuidados ───
+  "beauty": "Beleza & Cuidados",
   "beleza": "Beleza & Cuidados",
   "cabeleireiro": "Beleza & Cuidados",
   "cosmético": "Beleza & Cuidados",
   "cosmetico": "Beleza & Cuidados",
   "higiene": "Beleza & Cuidados",
 
-  // Genérico
+  // ─── Educação (só filhos/escola) ───
+  "education": "Educação",
+  "educação": "Educação",
+  "educacao": "Educação",
+  "escola": "Educação",
+  "universidade": "Educação",
+  "propina": "Educação",
+
+  // ─── Pessoal (desenvolvimento pessoal, hobbies, documentos) ───
+  "writing": "Pessoal",
+  "7ecos books": "Pessoal",
+  "despesas pessoais bruno": "Pessoal",
+  "pessoal": "Pessoal",
+  "espiritualidade": "Pessoal",
+  "documentos id": "Pessoal",
+  "curso": "Pessoal",
+  "livros": "Pessoal",
+  "formação": "Pessoal",
+  "formacao": "Pessoal",
+
+  // ─── Família (filhos + apoio familiar) ───
+  "baby cris": "Família",
+  "kidz toys and fun": "Família",
+  "ajudas familiares": "Família",
+  "filhos": "Família",
+  "família": "Família",
+  "familia": "Família",
+  "crianças": "Família",
+  "criancas": "Família",
+
+  // ─── Transporte (inclui combustível e manutenção) ───
+  "transportation": "Transporte",
+  "transporte": "Transporte",
+  "combustível": "Transporte",
+  "combustivel": "Transporte",
+  "gasolina": "Transporte",
+  "gasóleo": "Transporte",
+  "uber": "Transporte",
+  "bolt": "Transporte",
+  "taxi": "Transporte",
+  "táxi": "Transporte",
+  "chapa": "Transporte",
+  "estacionamento": "Transporte",
+  "manutenção veículo": "Transporte",
+  "manutenção veiculo": "Transporte",
+  "seguro auto": "Transporte",
+  "carro": "Transporte",
+  "automóvel": "Transporte",
+
+  // ─── Viagens (só despesas de viagem) ───
+  "holidays": "Viagens",
+  "viagens despesas": "Viagens",
+  "viagem": "Viagens",
+  "viagens": "Viagens",
+  "férias": "Viagens",
+  "ferias": "Viagens",
+  "hotel": "Viagens",
+
+  // ─── Rendimentos (separados correctamente) ───
+  "salary": "Salário",
+  "salário": "Salário",
+  "salario": "Salário",
+  "vencimento": "Salário",
+  "ordenado": "Salário",
+  "mensalidades coachme": "Freelance",
+  "bruno income": "Freelance",
+  "vendas": "Freelance",
+  "sete-ecos project": "Freelance",
+  "viagens serviço": "Outro Rendimento",
+  "subsídio viagem": "Outro Rendimento",
+  "award": "Bónus",
+  "freelance": "Freelance",
+  "bónus": "Bónus",
+  "bonus": "Bónus",
+  "rendimento": "Outro Rendimento",
+  "renda (recebida)": "Rendimento Passivo",
+  "dividendos": "Rendimento Passivo",
+  "reembolso": "Reembolso",
+  "reembolso lomesio": "Reembolso",
+  "investimento": "Investimento",
+  "investimentos": "Investimento",
+  "poupança": "Poupança",
+  "poupanca": "Poupança",
+  "xitique": "Xitique",
+
+  // ─── Roupa ───
+  "clothing": "Roupa",
+  "roupa": "Roupa",
+  "vestuário": "Roupa",
+  "vestuario": "Roupa",
+
+  // ─── Subscrições & Digital ───
+  "digital apps & services": "Subscrições",
+  "apple bills": "Subscrições",
+  "apple bill": "Subscrições",
+  "subscrição": "Subscrições",
+  "subscricao": "Subscrições",
+  "assinatura": "Subscrições",
+  "netflix": "Subscrições",
+  "spotify": "Subscrições",
+  "streaming": "Subscrições",
+
+  // ─── Compras ───
+  "personal gadgets": "Compras",
+  "compras": "Compras",
+  "shopping": "Compras",
+  "electrónica": "Compras",
+  "electronica": "Compras",
+  "tecnologia": "Compras",
+
+  // ─── Animais ───
+  "pets": "Animais",
+  "animais": "Animais",
+
+  // ─── Doações & Contribuições ───
+  "donations": "Doações",
+  "doação": "Doações",
+  "doacao": "Doações",
+  "igreja": "Doações",
+  "dízimo": "Doações",
+  "dizimo": "Doações",
+  "caridade": "Doações",
+  "oferta": "Doações",
+
+  // ─── Dívidas & Empréstimos ───
+  "loan": "Dívidas",
+  "empréstimos bancários": "Dívidas",
+  "crédito fml": "Dívidas",
+  "moza credito": "Dívidas",
+  "empréstimo": "Dívidas",
+  "emprestimo": "Dívidas",
+  "dívida": "Dívidas",
+  "divida": "Dívidas",
+  "cartão crédito": "Dívidas",
+  "juros": "Dívidas",
+
+  // ─── Taxas Bancárias ───
+  "comissões bancárias": "Taxas Bancárias",
+  "taxa": "Taxas Bancárias",
+  "taxa bancária": "Taxas Bancárias",
+  "comissão": "Taxas Bancárias",
+
+  // ─── Contas & Serviços ───
+  "contas": "Contas & Serviços",
+  "água": "Contas & Serviços",
+  "agua": "Contas & Serviços",
+  "electricidade": "Contas & Serviços",
+  "luz": "Contas & Serviços",
+  "gás": "Contas & Serviços",
+  "gas": "Contas & Serviços",
+
+  // ─── Comunicação ───
+  "internet": "Comunicação",
+  "telefone": "Comunicação",
+  "telemóvel": "Comunicação",
+  "telemovel": "Comunicação",
+  "comunicação": "Comunicação",
+  "comunicacao": "Comunicação",
+  "tv": "Comunicação",
+
+  // ─── Levantamentos ATM ───
+  "levantamentos fim de semana": "Levantamentos",
+
+  // ─── Genérico ───
   "others": "Outros",
   "outro": "Outros",
   "outros": "Outros",
@@ -330,64 +332,120 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
  * Each key matches MOBILLS_CATEGORY_MAP — the subcategory is more specific.
  */
 const MOBILLS_SUBCATEGORY_MAP: Record<string, string> = {
-  // ─── Real Mobills categories from user data ───
-
-  // Alimentação & Restaurantes
+  // ─── Alimentação ───
   "supermercado": "Supermercado",
-  "talho": "Talho & Mercearia",
-  "mercearia": "Talho & Mercearia",
-  "alimentação": "Alimentação Geral",
-  "alimentacao": "Alimentação Geral",
-  "comida": "Alimentação Geral",
+  "talho": "Talho",
+  "mercearia": "Mercearia",
+  "alimentação": "Geral",
+  "alimentacao": "Geral",
+  "comida": "Geral",
   "padaria": "Padaria",
+
+  // ─── Restaurantes ───
   "restaurantes": "Refeições Fora",
   "restaurante": "Refeições Fora",
   "almoços de família": "Refeições em Grupo",
-  "bottle store & smoke": "Bares & Bebidas",
   "café": "Cafés & Snacks",
   "lanche": "Cafés & Snacks",
   "delivery": "Entregas",
   "fast food": "Fast Food",
 
-  // Casa & Contas
-  "home bills": "Contas da Casa",
-  "home clothes & dish": "Têxteis & Utensílios",
-  "house appliances & furniture": "Electrodomésticos & Mobília",
-  "garden": "Jardim",
-  "manutenção piscina": "Piscina",
-  "obras e reparações": "Obras & Reparações",
-  "katembe home project": "Projecto Habitação",
-  "aquisição de habitação": "Aquisição de Imóvel",
-
-  // Saúde & Beleza & Fitness
-  "health": "Saúde Geral",
-  "beauty": "Estética & Cuidados",
-  "fitness": "Fitness & Ginásio",
-
-  // Educação
-  "education": "Educação Geral",
-  "7ecos books": "Livros",
-  "writing": "Escrita & Formação",
-  "hobbies: escritora & afins": "Hobbies Criativos",
-
-  // Família & Filhos
-  "baby cris": "Filhos",
-  "kidz toys and fun": "Brinquedos & Actividades",
-  "ajudas familiares": "Apoio Familiar",
+  // ─── Lazer ───
+  "bottle store & smoke": "Bares & Bebidas",
+  "entertainment": "Entretenimento",
+  "lazer": "Geral",
+  "entretenimento": "Entretenimento",
+  "cinema": "Cinema & Espectáculos",
+  "diversão": "Geral",
   "aniversários": "Celebrações",
   "feriados e festas": "Celebrações",
-  "filhos": "Filhos",
-  "família": "Despesas Familiares",
-  "familia": "Despesas Familiares",
-  "crianças": "Filhos",
-  "criancas": "Filhos",
   "gift": "Presentes",
   "gifts": "Presentes",
 
-  // Transporte & Viatura
-  "transportation": "Transporte Geral",
-  "aquisição de viatura": "Compra de Viatura",
-  "transporte": "Transporte Geral",
+  // ─── Casa ───
+  "home bills": "Contas da Casa",
+  "home clothes & dish": "Têxteis & Utensílios",
+  "house appliances & furniture": "Electrodomésticos",
+  "garden": "Jardim",
+  "manutenção piscina": "Piscina",
+  "obras e reparações": "Obras & Reparações",
+  "employees wages": "Empregados Domésticos",
+  "casa": "Geral",
+  "moradia": "Habitação",
+  "renda": "Renda / Aluguer",
+  "aluguel": "Renda / Aluguer",
+  "aluguer": "Renda / Aluguer",
+  "condomínio": "Condomínio",
+  "condominio": "Condomínio",
+  "mobília": "Mobília & Decoração",
+  "decoração": "Mobília & Decoração",
+  "limpeza": "Limpeza",
+  "empregada": "Empregados Domésticos",
+  "doméstica": "Empregados Domésticos",
+
+  // ─── Investimento ───
+  "katembe home project": "Projecto Habitação",
+  "aquisição de habitação": "Imóvel",
+  "aquisição de viatura": "Viatura",
+
+  // ─── Saúde ───
+  "health": "Geral",
+  "fitness": "Fitness & Ginásio",
+  "saúde": "Geral",
+  "saude": "Geral",
+  "farmácia": "Farmácia",
+  "farmacia": "Farmácia",
+  "médico": "Consulta Médica",
+  "medico": "Consulta Médica",
+  "hospital": "Hospital",
+  "consulta": "Consulta Médica",
+  "dentista": "Dentista",
+  "ginásio": "Fitness & Ginásio",
+  "ginasio": "Fitness & Ginásio",
+  "gym": "Fitness & Ginásio",
+
+  // ─── Beleza & Cuidados ───
+  "beauty": "Estética",
+  "beleza": "Estética",
+  "cabeleireiro": "Cabeleireiro",
+  "cosmético": "Cosméticos",
+  "cosmetico": "Cosméticos",
+  "higiene": "Higiene",
+
+  // ─── Educação (filhos) ───
+  "education": "Educação Filhos",
+  "educação": "Geral",
+  "educacao": "Geral",
+  "escola": "Escola",
+  "universidade": "Universidade",
+  "propina": "Propinas",
+
+  // ─── Pessoal (desenvolvimento pessoal) ───
+  "writing": "Escrita & Formação",
+  "7ecos books": "Livros",
+  "hobbies: escritora & afins": "Hobbies",
+  "despesas pessoais bruno": "Despesas Pessoais",
+  "pessoal": "Geral",
+  "espiritualidade": "Bem-estar",
+  "documentos id": "Documentação",
+  "curso": "Cursos & Formação",
+  "livros": "Livros",
+  "formação": "Cursos & Formação",
+  "formacao": "Cursos & Formação",
+
+  // ─── Família ───
+  "baby cris": "Filhos",
+  "kidz toys and fun": "Brinquedos",
+  "ajudas familiares": "Apoio Familiar",
+  "filhos": "Filhos",
+  "família": "Geral",
+  "familia": "Geral",
+  "crianças": "Filhos",
+  "criancas": "Filhos",
+
+  // ─── Transporte ───
+  "transportation": "Geral",
+  "transporte": "Geral",
   "combustível": "Combustível",
   "combustivel": "Combustível",
   "gasolina": "Combustível",
@@ -400,187 +458,133 @@ const MOBILLS_SUBCATEGORY_MAP: Record<string, string> = {
   "estacionamento": "Estacionamento",
   "manutenção veículo": "Manutenção",
   "manutenção veiculo": "Manutenção",
-  "seguro auto": "Seguro Auto",
-  "carro": "Viatura Geral",
-  "automóvel": "Viatura Geral",
+  "seguro auto": "Seguro",
+  "carro": "Viatura",
+  "automóvel": "Viatura",
 
-  // Viagens
+  // ─── Viagens ───
   "holidays": "Férias",
   "viagens despesas": "Despesas de Viagem",
-  "viagens serviço": "Viagem de Trabalho",
-  "subsídio viagem": "Subsídio de Viagem",
-  "viagem": "Viagem Geral",
-  "viagens": "Viagem Geral",
+  "viagem": "Geral",
+  "viagens": "Geral",
   "férias": "Férias",
   "ferias": "Férias",
   "hotel": "Alojamento",
 
-  // Pessoal & Roupa
+  // ─── Rendimentos ───
+  "salary": "Salário Mensal",
+  "salário": "Salário Mensal",
+  "salario": "Salário Mensal",
+  "vencimento": "Salário Mensal",
+  "ordenado": "Salário Mensal",
+  "mensalidades coachme": "Coaching",
+  "bruno income": "Rendimento Extra",
+  "vendas": "Vendas",
+  "sete-ecos project": "Projecto",
+  "viagens serviço": "Subsídio Viagem",
+  "subsídio viagem": "Subsídio Viagem",
+  "award": "Prémio",
+  "freelance": "Trabalho Independente",
+  "bónus": "Bónus",
+  "bonus": "Bónus",
+  "rendimento": "Geral",
+  "renda (recebida)": "Renda Recebida",
+  "dividendos": "Dividendos",
+  "reembolso": "Reembolso",
+  "reembolso lomesio": "Reembolso",
+  "investimento": "Geral",
+  "investimentos": "Geral",
+  "poupança": "Poupança",
+  "poupanca": "Poupança",
+  "xitique": "Xitique",
+
+  // ─── Roupa ───
   "clothing": "Vestuário",
   "roupa": "Vestuário",
   "vestuário": "Vestuário",
   "vestuario": "Vestuário",
-  "despesas pessoais bruno": "Despesas Pessoais",
-  "pessoal": "Pessoal Geral",
-  "personal gadgets": "Gadgets & Electrónica",
-  "espiritualidade": "Bem-estar",
-  "documentos id": "Documentação",
 
-  // Subscrições & Digital
+  // ─── Subscrições ───
   "digital apps & services": "Apps & Serviços",
   "apple bills": "Apps & Serviços",
   "apple bill": "Apps & Serviços",
-  "mensalidades coachme": "Coaching & Mentoria",
-  "subscrição": "Subscrição Geral",
-  "subscricao": "Subscrição Geral",
-  "assinatura": "Subscrição Geral",
+  "subscrição": "Geral",
+  "subscricao": "Geral",
+  "assinatura": "Geral",
   "netflix": "Streaming",
   "spotify": "Streaming",
   "streaming": "Streaming",
 
-  // Lazer & Entretenimento
-  "entertainment": "Entretenimento Geral",
-  "lazer": "Lazer Geral",
-  "entretenimento": "Entretenimento Geral",
-  "cinema": "Cinema & Espectáculos",
-  "diversão": "Diversão Geral",
-  "levantamentos fim de semana": "ATM",
+  // ─── Compras ───
+  "personal gadgets": "Gadgets & Electrónica",
+  "compras": "Geral",
+  "shopping": "Geral",
+  "electrónica": "Electrónica",
+  "electronica": "Electrónica",
+  "tecnologia": "Tecnologia",
 
-  // Animais
+  // ─── Animais ───
   "pets": "Animais de Estimação",
   "animais": "Animais de Estimação",
 
-  // Doações & Ofertas
-  "donations": "Doação Geral",
-  "doação": "Doação Geral",
-  "doacao": "Doação Geral",
+  // ─── Doações ───
+  "donations": "Geral",
+  "doação": "Geral",
+  "doacao": "Geral",
   "igreja": "Contribuição Religiosa",
   "dízimo": "Contribuição Religiosa",
   "dizimo": "Contribuição Religiosa",
   "caridade": "Caridade",
   "oferta": "Oferta",
 
-  // Trabalho & Negócio
-  "employees wages": "Salários de Empregados",
-  "sete-ecos project": "Projecto Empresarial",
-
-  // Dívidas & Empréstimos
-  "loan": "Empréstimo Geral",
+  // ─── Dívidas ───
+  "loan": "Empréstimo",
   "empréstimos bancários": "Empréstimo Bancário",
   "crédito fml": "Crédito Pessoal",
   "moza credito": "Crédito Pessoal",
-  "reembolso lomesio": "Reembolso de Dívida",
-  "empréstimo": "Empréstimo Geral",
-  "emprestimo": "Empréstimo Geral",
-  "dívida": "Dívida Geral",
-  "divida": "Dívida Geral",
+  "empréstimo": "Empréstimo",
+  "emprestimo": "Empréstimo",
+  "dívida": "Geral",
+  "divida": "Geral",
   "cartão crédito": "Cartão de Crédito",
   "juros": "Juros",
 
-  // Taxas Bancárias
+  // ─── Taxas Bancárias ───
   "comissões bancárias": "Comissões",
-  "taxa": "Taxas Gerais",
-  "taxa bancária": "Taxas Gerais",
+  "taxa": "Taxas",
+  "taxa bancária": "Taxas",
   "comissão": "Comissões",
 
-  // Contas & Serviços
-  "contas": "Contas Gerais",
+  // ─── Contas & Serviços ───
+  "contas": "Geral",
   "água": "Água",
   "agua": "Água",
   "electricidade": "Electricidade",
   "luz": "Electricidade",
   "gás": "Gás",
   "gas": "Gás",
+
+  // ─── Comunicação ───
   "internet": "Internet",
   "telefone": "Telefone",
   "telemóvel": "Telemóvel",
   "telemovel": "Telemóvel",
-  "comunicação": "Comunicação Geral",
-  "comunicacao": "Comunicação Geral",
+  "comunicação": "Geral",
+  "comunicacao": "Geral",
   "tv": "TV & Cabo",
 
-  // Rendimentos
-  "salary": "Salário Mensal",
-  "salário": "Salário Mensal",
-  "salario": "Salário Mensal",
-  "vencimento": "Salário Mensal",
-  "ordenado": "Salário Mensal",
-  "bruno income": "Rendimento de Terceiros",
-  "vendas": "Vendas",
-  "award": "Prémio",
-  "freelance": "Trabalho Independente",
-  "bónus": "Bónus",
-  "bonus": "Bónus",
-  "rendimento": "Rendimento Geral",
-  "renda (recebida)": "Renda Recebida",
-  "dividendos": "Dividendos",
-  "reembolso": "Reembolso",
-  "investimento": "Investimento Geral",
-  "investimentos": "Investimento Geral",
-  "poupança": "Poupança",
-  "poupanca": "Poupança",
-  "xitique": "Xitique",
+  // ─── Levantamentos ───
+  "levantamentos fim de semana": "ATM",
 
-  // Compras
-  "compras": "Compras Gerais",
-  "shopping": "Compras Gerais",
-  "electrónica": "Electrónica",
-  "electronica": "Electrónica",
-  "tecnologia": "Tecnologia",
-
-  // Casa genérico
-  "casa": "Casa Geral",
-  "moradia": "Habitação",
-  "renda": "Renda / Aluguer",
-  "aluguel": "Renda / Aluguer",
-  "aluguer": "Renda / Aluguer",
-  "condomínio": "Condomínio",
-  "condominio": "Condomínio",
-  "mobília": "Mobília & Decoração",
-  "decoração": "Mobília & Decoração",
-  "limpeza": "Limpeza",
-  "empregada": "Empregada Doméstica",
-  "doméstica": "Empregada Doméstica",
-
-  // Saúde genérico
-  "saúde": "Saúde Geral",
-  "saude": "Saúde Geral",
-  "farmácia": "Farmácia",
-  "farmacia": "Farmácia",
-  "médico": "Consulta Médica",
-  "medico": "Consulta Médica",
-  "hospital": "Hospital",
-  "consulta": "Consulta Médica",
-  "dentista": "Dentista",
-  "ginásio": "Fitness & Ginásio",
-  "ginasio": "Fitness & Ginásio",
-  "gym": "Fitness & Ginásio",
-
-  // Educação genérico
-  "educação": "Educação Geral",
-  "educacao": "Educação Geral",
-  "escola": "Escola",
-  "universidade": "Universidade",
-  "curso": "Cursos & Formação",
-  "livros": "Livros",
-  "formação": "Cursos & Formação",
-  "formacao": "Cursos & Formação",
-  "propina": "Propinas",
-  "beleza": "Estética & Cuidados",
-  "cabeleireiro": "Cabeleireiro",
-  "cosmético": "Cosméticos",
-  "cosmetico": "Cosméticos",
-  "higiene": "Higiene Pessoal",
-
-  // Genérico
+  // ─── Genérico ───
   "others": "Outros",
   "outro": "Outros",
   "outros": "Outros",
   "other": "Outros",
-  "paid": "Pagamento Geral",
+  "paid": "Pagamento",
   "adjustment": "Correcção de Saldo",
-  "transferência": "Transferência Geral",
-  "transferencia": "Transferência Geral",
+  "transferência": "Transferência",
+  "transferencia": "Transferência",
   "ajuste": "Correcção de Saldo",
 };
 
