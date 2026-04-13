@@ -30,6 +30,7 @@ export interface ImportedTransaction {
   description: string;
   originalCategory: string;
   mappedCategory: string;
+  mappedSubcategory?: string;
   account: string;
   amount: number;
   type: "income" | "expense" | "transfer";
