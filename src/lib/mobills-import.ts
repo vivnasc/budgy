@@ -71,7 +71,7 @@ export interface ImportResult {
  * Consolidates the user's many Mobills categories into cleaner groups.
  */
 const MOBILLS_CATEGORY_MAP: Record<string, string> = {
-  // ─── Real Mobills categories from user data (59 categories) ───
+  // ─── Real Mobills categories from user data ───
 
   // Alimentação & Restaurantes
   "supermercado": "Alimentação",
@@ -84,7 +84,7 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "restaurantes": "Restaurantes",
   "restaurante": "Restaurantes",
   "almoços de família": "Restaurantes",
-  "bottle store & smoke": "Restaurantes",
+  "bottle store & smoke": "Lazer",
   "café": "Restaurantes",
   "lanche": "Restaurantes",
   "delivery": "Restaurantes",
@@ -109,25 +109,25 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "education": "Educação",
   "7ecos books": "Educação",
   "writing": "Educação",
-  "hobbies: escritora & afins": "Educação",
+  "hobbies: escritora & afins": "Lazer",
 
   // Família & Filhos
   "baby cris": "Família",
   "kidz toys and fun": "Família",
-  "ajudas familiares": "Família",
-  "aniversários": "Família",
-  "feriados e festas": "Família",
+  "ajudas familiares": "Transferências",
+  "aniversários": "Lazer",
+  "feriados e festas": "Lazer",
   "filhos": "Família",
   "família": "Família",
   "familia": "Família",
   "crianças": "Família",
   "criancas": "Família",
-  "gift": "Família",
-  "gifts": "Família",
+  "gift": "Lazer",
+  "gifts": "Lazer",
 
   // Transporte & Viatura
   "transportation": "Transporte",
-  "aquisição de viatura": "Transporte",
+  "aquisição de viatura": "Automóvel",
   "transporte": "Transporte",
   "combustível": "Combustível",
   "combustivel": "Combustível",
@@ -185,7 +185,7 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "entretenimento": "Lazer",
   "cinema": "Lazer",
   "diversão": "Lazer",
-  "levantamentos fim de semana": "Lazer",
+  "levantamentos fim de semana": "Levantamentos",
 
   // Animais
   "pets": "Animais",
@@ -325,6 +325,265 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "ajuste": "Ajuste",
 };
 
+/**
+ * Maps Mobills Portuguese categories to BUDGY subcategories.
+ * Each key matches MOBILLS_CATEGORY_MAP — the subcategory is more specific.
+ */
+const MOBILLS_SUBCATEGORY_MAP: Record<string, string> = {
+  // ─── Real Mobills categories from user data ───
+
+  // Alimentação & Restaurantes
+  "supermercado": "Supermercado",
+  "talho": "Talho & Mercearia",
+  "mercearia": "Talho & Mercearia",
+  "alimentação": "Alimentação Geral",
+  "alimentacao": "Alimentação Geral",
+  "comida": "Alimentação Geral",
+  "padaria": "Padaria",
+  "restaurantes": "Refeições Fora",
+  "restaurante": "Refeições Fora",
+  "almoços de família": "Refeições em Grupo",
+  "bottle store & smoke": "Bares & Bebidas",
+  "café": "Cafés & Snacks",
+  "lanche": "Cafés & Snacks",
+  "delivery": "Entregas",
+  "fast food": "Fast Food",
+
+  // Casa & Contas
+  "home bills": "Contas da Casa",
+  "home clothes & dish": "Têxteis & Utensílios",
+  "house appliances & furniture": "Electrodomésticos & Mobília",
+  "garden": "Jardim",
+  "manutenção piscina": "Piscina",
+  "obras e reparações": "Obras & Reparações",
+  "katembe home project": "Projecto Habitação",
+  "aquisição de habitação": "Aquisição de Imóvel",
+
+  // Saúde & Beleza & Fitness
+  "health": "Saúde Geral",
+  "beauty": "Estética & Cuidados",
+  "fitness": "Fitness & Ginásio",
+
+  // Educação
+  "education": "Educação Geral",
+  "7ecos books": "Livros",
+  "writing": "Escrita & Formação",
+  "hobbies: escritora & afins": "Hobbies Criativos",
+
+  // Família & Filhos
+  "baby cris": "Filhos",
+  "kidz toys and fun": "Brinquedos & Actividades",
+  "ajudas familiares": "Apoio Familiar",
+  "aniversários": "Celebrações",
+  "feriados e festas": "Celebrações",
+  "filhos": "Filhos",
+  "família": "Despesas Familiares",
+  "familia": "Despesas Familiares",
+  "crianças": "Filhos",
+  "criancas": "Filhos",
+  "gift": "Presentes",
+  "gifts": "Presentes",
+
+  // Transporte & Viatura
+  "transportation": "Transporte Geral",
+  "aquisição de viatura": "Compra de Viatura",
+  "transporte": "Transporte Geral",
+  "combustível": "Combustível",
+  "combustivel": "Combustível",
+  "gasolina": "Combustível",
+  "gasóleo": "Combustível",
+  "uber": "Táxi & Apps",
+  "bolt": "Táxi & Apps",
+  "taxi": "Táxi & Apps",
+  "táxi": "Táxi & Apps",
+  "chapa": "Transporte Público",
+  "estacionamento": "Estacionamento",
+  "manutenção veículo": "Manutenção",
+  "manutenção veiculo": "Manutenção",
+  "seguro auto": "Seguro Auto",
+  "carro": "Viatura Geral",
+  "automóvel": "Viatura Geral",
+
+  // Viagens
+  "holidays": "Férias",
+  "viagens despesas": "Despesas de Viagem",
+  "viagens serviço": "Viagem de Trabalho",
+  "subsídio viagem": "Subsídio de Viagem",
+  "viagem": "Viagem Geral",
+  "viagens": "Viagem Geral",
+  "férias": "Férias",
+  "ferias": "Férias",
+  "hotel": "Alojamento",
+
+  // Pessoal & Roupa
+  "clothing": "Vestuário",
+  "roupa": "Vestuário",
+  "vestuário": "Vestuário",
+  "vestuario": "Vestuário",
+  "despesas pessoais bruno": "Despesas Pessoais",
+  "pessoal": "Pessoal Geral",
+  "personal gadgets": "Gadgets & Electrónica",
+  "espiritualidade": "Bem-estar",
+  "documentos id": "Documentação",
+
+  // Subscrições & Digital
+  "digital apps & services": "Apps & Serviços",
+  "apple bills": "Apps & Serviços",
+  "apple bill": "Apps & Serviços",
+  "mensalidades coachme": "Coaching & Mentoria",
+  "subscrição": "Subscrição Geral",
+  "subscricao": "Subscrição Geral",
+  "assinatura": "Subscrição Geral",
+  "netflix": "Streaming",
+  "spotify": "Streaming",
+  "streaming": "Streaming",
+
+  // Lazer & Entretenimento
+  "entertainment": "Entretenimento Geral",
+  "lazer": "Lazer Geral",
+  "entretenimento": "Entretenimento Geral",
+  "cinema": "Cinema & Espectáculos",
+  "diversão": "Diversão Geral",
+  "levantamentos fim de semana": "ATM",
+
+  // Animais
+  "pets": "Animais de Estimação",
+  "animais": "Animais de Estimação",
+
+  // Doações & Ofertas
+  "donations": "Doação Geral",
+  "doação": "Doação Geral",
+  "doacao": "Doação Geral",
+  "igreja": "Contribuição Religiosa",
+  "dízimo": "Contribuição Religiosa",
+  "dizimo": "Contribuição Religiosa",
+  "caridade": "Caridade",
+  "oferta": "Oferta",
+
+  // Trabalho & Negócio
+  "employees wages": "Salários de Empregados",
+  "sete-ecos project": "Projecto Empresarial",
+
+  // Dívidas & Empréstimos
+  "loan": "Empréstimo Geral",
+  "empréstimos bancários": "Empréstimo Bancário",
+  "crédito fml": "Crédito Pessoal",
+  "moza credito": "Crédito Pessoal",
+  "reembolso lomesio": "Reembolso de Dívida",
+  "empréstimo": "Empréstimo Geral",
+  "emprestimo": "Empréstimo Geral",
+  "dívida": "Dívida Geral",
+  "divida": "Dívida Geral",
+  "cartão crédito": "Cartão de Crédito",
+  "juros": "Juros",
+
+  // Taxas Bancárias
+  "comissões bancárias": "Comissões",
+  "taxa": "Taxas Gerais",
+  "taxa bancária": "Taxas Gerais",
+  "comissão": "Comissões",
+
+  // Contas & Serviços
+  "contas": "Contas Gerais",
+  "água": "Água",
+  "agua": "Água",
+  "electricidade": "Electricidade",
+  "luz": "Electricidade",
+  "gás": "Gás",
+  "gas": "Gás",
+  "internet": "Internet",
+  "telefone": "Telefone",
+  "telemóvel": "Telemóvel",
+  "telemovel": "Telemóvel",
+  "comunicação": "Comunicação Geral",
+  "comunicacao": "Comunicação Geral",
+  "tv": "TV & Cabo",
+
+  // Rendimentos
+  "salary": "Salário Mensal",
+  "salário": "Salário Mensal",
+  "salario": "Salário Mensal",
+  "vencimento": "Salário Mensal",
+  "ordenado": "Salário Mensal",
+  "bruno income": "Rendimento de Terceiros",
+  "vendas": "Vendas",
+  "award": "Prémio",
+  "freelance": "Trabalho Independente",
+  "bónus": "Bónus",
+  "bonus": "Bónus",
+  "rendimento": "Rendimento Geral",
+  "renda (recebida)": "Renda Recebida",
+  "dividendos": "Dividendos",
+  "reembolso": "Reembolso",
+  "investimento": "Investimento Geral",
+  "investimentos": "Investimento Geral",
+  "poupança": "Poupança",
+  "poupanca": "Poupança",
+  "xitique": "Xitique",
+
+  // Compras
+  "compras": "Compras Gerais",
+  "shopping": "Compras Gerais",
+  "electrónica": "Electrónica",
+  "electronica": "Electrónica",
+  "tecnologia": "Tecnologia",
+
+  // Casa genérico
+  "casa": "Casa Geral",
+  "moradia": "Habitação",
+  "renda": "Renda / Aluguer",
+  "aluguel": "Renda / Aluguer",
+  "aluguer": "Renda / Aluguer",
+  "condomínio": "Condomínio",
+  "condominio": "Condomínio",
+  "mobília": "Mobília & Decoração",
+  "decoração": "Mobília & Decoração",
+  "limpeza": "Limpeza",
+  "empregada": "Empregada Doméstica",
+  "doméstica": "Empregada Doméstica",
+
+  // Saúde genérico
+  "saúde": "Saúde Geral",
+  "saude": "Saúde Geral",
+  "farmácia": "Farmácia",
+  "farmacia": "Farmácia",
+  "médico": "Consulta Médica",
+  "medico": "Consulta Médica",
+  "hospital": "Hospital",
+  "consulta": "Consulta Médica",
+  "dentista": "Dentista",
+  "ginásio": "Fitness & Ginásio",
+  "ginasio": "Fitness & Ginásio",
+  "gym": "Fitness & Ginásio",
+
+  // Educação genérico
+  "educação": "Educação Geral",
+  "educacao": "Educação Geral",
+  "escola": "Escola",
+  "universidade": "Universidade",
+  "curso": "Cursos & Formação",
+  "livros": "Livros",
+  "formação": "Cursos & Formação",
+  "formacao": "Cursos & Formação",
+  "propina": "Propinas",
+  "beleza": "Estética & Cuidados",
+  "cabeleireiro": "Cabeleireiro",
+  "cosmético": "Cosméticos",
+  "cosmetico": "Cosméticos",
+  "higiene": "Higiene Pessoal",
+
+  // Genérico
+  "others": "Outros",
+  "outro": "Outros",
+  "outros": "Outros",
+  "other": "Outros",
+  "paid": "Pagamento Geral",
+  "adjustment": "Correcção de Saldo",
+  "transferência": "Transferência Geral",
+  "transferencia": "Transferência Geral",
+  "ajuste": "Correcção de Saldo",
+};
+
 function normalizeForMapping(text: string): string {
   return text
     .toLowerCase()
@@ -333,10 +592,15 @@ function normalizeForMapping(text: string): string {
     .trim();
 }
 
-// Pre-build a normalized lookup map (accent-stripped keys)
+// Pre-build normalized lookup maps (accent-stripped keys)
 const NORMALIZED_CATEGORY_MAP: Record<string, string> = {};
 for (const [key, value] of Object.entries(MOBILLS_CATEGORY_MAP)) {
   NORMALIZED_CATEGORY_MAP[normalizeForMapping(key)] = value;
+}
+
+const NORMALIZED_SUBCATEGORY_MAP: Record<string, string> = {};
+for (const [key, value] of Object.entries(MOBILLS_SUBCATEGORY_MAP)) {
+  NORMALIZED_SUBCATEGORY_MAP[normalizeForMapping(key)] = value;
 }
 
 function mapCategory(
@@ -344,7 +608,7 @@ function mapCategory(
   subcategory?: string,
   description?: string,
   type?: "income" | "expense" | "transfer"
-): { mapped: string; needsReview: boolean } {
+): { mapped: string; mappedSubcategory: string; needsReview: boolean } {
   // Try category first, then subcategory
   const candidates = [
     mobillsCategory,
@@ -356,16 +620,28 @@ function mapCategory(
 
     // Direct match (accent-stripped)
     if (NORMALIZED_CATEGORY_MAP[normalized]) {
-      return { mapped: NORMALIZED_CATEGORY_MAP[normalized], needsReview: false };
+      return {
+        mapped: NORMALIZED_CATEGORY_MAP[normalized],
+        mappedSubcategory: NORMALIZED_SUBCATEGORY_MAP[normalized] || NORMALIZED_CATEGORY_MAP[normalized],
+        needsReview: false,
+      };
     }
 
     // Partial match (min 3 chars, accent-stripped keys)
     for (const [key, value] of Object.entries(NORMALIZED_CATEGORY_MAP)) {
       if (key.length >= 3 && normalized.includes(key)) {
-        return { mapped: value, needsReview: false };
+        return {
+          mapped: value,
+          mappedSubcategory: NORMALIZED_SUBCATEGORY_MAP[key] || value,
+          needsReview: false,
+        };
       }
       if (normalized.length >= 3 && key.includes(normalized)) {
-        return { mapped: value, needsReview: false };
+        return {
+          mapped: value,
+          mappedSubcategory: NORMALIZED_SUBCATEGORY_MAP[key] || value,
+          needsReview: false,
+        };
       }
     }
   }
@@ -374,12 +650,12 @@ function mapCategory(
   if (description && description.length > 1) {
     const result = autoCategorize(description, type || "expense");
     if (result.confidence >= 0.7 && result.category !== "Outros" && result.category !== "Outro Rendimento") {
-      return { mapped: result.category, needsReview: false };
+      return { mapped: result.category, mappedSubcategory: result.category, needsReview: false };
     }
   }
 
   // No match found — default to Outros
-  return { mapped: "Outros", needsReview: true };
+  return { mapped: "Outros", mappedSubcategory: "Outros", needsReview: true };
 }
 
 // ─── CSV Parser ──────────────────────────────────────────────────────────────
@@ -623,7 +899,7 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       }
 
       const originalCategory = row.category || "Outros";
-      const { mapped, needsReview } = mapCategory(originalCategory, row.subcategory, row.description, type);
+      const { mapped, mappedSubcategory, needsReview } = mapCategory(originalCategory, row.subcategory, row.description, type);
 
       // Track category mapping
       if (originalCategory !== mapped) {
@@ -650,6 +926,7 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
         description: row.description || originalCategory,
         originalCategory,
         mappedCategory: mapped,
+        mappedSubcategory,
         account: row.account || "Principal",
         amount,
         type,

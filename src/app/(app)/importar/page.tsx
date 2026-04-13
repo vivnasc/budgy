@@ -21,6 +21,7 @@ import {
 import Link from "next/link";
 import type { ParsedSMS } from "@/lib/sms-parser";
 import type { ImportResult } from "@/lib/mobills-import";
+import { generateImportPDF } from "@/lib/import-pdf";
 import { SUPPORTED_BANKS } from "@/lib/sms-parser";
 import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
 import { SUPPORTED_BANK_FORMATS, type BankFormat } from "@/lib/bank-statement-parser";
@@ -703,6 +704,56 @@ function ImportPreview({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [categoriesConfirmed, setCategoriesConfirmed] = useState(false);
+  const [categoryOverrides, setCategoryOverrides] = useState<Record<string, string>>({});
+
+  // Build the list of all available BUDGY category names (expense + income + transfer, deduplicated)
+  const allCategoryNames: string[] = [];
+  const seenNames = new Set<string>();
+  for (const group of [BUDGY_CATEGORIES.expense, BUDGY_CATEGORIES.income, BUDGY_CATEGORIES.transfer]) {
+    for (const cat of group) {
+      if (!seenNames.has(cat.name)) {
+        seenNames.add(cat.name);
+        allCategoryNames.push(cat.name);
+      }
+    }
+  }
+
+  // Current mapped categories with counts (before overrides), sorted by count
+  const mappedCategories = Object.entries(result.summary.categoryCounts)
+    .sort((a, b) => b[1] - a[1]);
+
+  const handleCategoryOverride = (originalMapped: string, newCategory: string) => {
+    setCategoryOverrides((prev) => {
+      if (newCategory === originalMapped) {
+        // Remove override if set back to original
+        const next = { ...prev };
+        delete next[originalMapped];
+        return next;
+      }
+      return { ...prev, [originalMapped]: newCategory };
+    });
+  };
+
+  const handleConfirmCategories = () => {
+    // Apply overrides to all transactions in result.imported
+    if (Object.keys(categoryOverrides).length > 0) {
+      for (const tx of result.imported) {
+        const override = categoryOverrides[tx.mappedCategory];
+        if (override) {
+          tx.mappedCategory = override;
+        }
+      }
+      // Update summary categoryCounts to match
+      const newCounts: Record<string, number> = {};
+      for (const tx of result.imported) {
+        newCounts[tx.mappedCategory] = (newCounts[tx.mappedCategory] ?? 0) + 1;
+      }
+      result.summary.categoryCounts = newCounts;
+      setCategoryOverrides({});
+    }
+    setCategoriesConfirmed(true);
+  };
 
   const handleSaveToDatabase = async () => {
     setSaving(true);
@@ -800,34 +851,110 @@ function ImportPreview({
         )}
       </div>
 
-      {/* Category Consolidation */}
+      {/* Category Review & Recategorization */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
-        <h3 className="text-sm font-bold text-gray-900 mb-1">Categorias organizadas</h3>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-sm font-bold text-gray-900">
+            {categoriesConfirmed ? "Categorias confirmadas" : "Rever categorias"}
+          </h3>
+          {categoriesConfirmed && (
+            <button
+              onClick={() => setCategoriesConfirmed(false)}
+              className="text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1"
+            >
+              <Edit3 className="w-3 h-3" />
+              Editar
+            </button>
+          )}
+        </div>
         <p className="text-xs text-gray-500 mb-4">
-          As tuas {Object.keys(result.summary.categoryCounts).length} categorias foram organizadas automaticamente.
+          {categoriesConfirmed
+            ? `${Object.keys(result.summary.categoryCounts).length} categorias organizadas.`
+            : `Verifica as ${mappedCategories.length} categorias mapeadas. Podes alterar antes de importar.`
+          }
         </p>
 
-        <div className="space-y-2">
-          {topCategories.map(([category, count]) => {
-            const percentage = Math.round((count / result.imported.length) * 100);
-            return (
-              <div key={category} className="flex items-center gap-3">
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-gray-700">{category}</span>
-                    <span className="text-xs text-gray-400">{count}x</span>
+        {!categoriesConfirmed ? (
+          <>
+            <div className="space-y-2.5">
+              {mappedCategories.map(([category, count]) => {
+                const currentValue = categoryOverrides[category] ?? category;
+                const isOverridden = categoryOverrides[category] !== undefined;
+                return (
+                  <div key={category} className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-medium truncate ${isOverridden ? "text-emerald-700 line-through" : "text-gray-700"}`}>
+                          {category}
+                        </span>
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0">
+                          {count} tx
+                        </span>
+                      </div>
+                    </div>
+                    <select
+                      value={currentValue}
+                      onChange={(e) => handleCategoryOverride(category, e.target.value)}
+                      className="text-xs bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-400 focus:border-emerald-400 max-w-[160px]"
+                    >
+                      {allCategoryNames.map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
                   </div>
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-400 rounded-full"
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
+                );
+              })}
+            </div>
+
+            {Object.keys(categoryOverrides).length > 0 && (
+              <div className="mt-3 bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+                <p className="text-xs text-emerald-700 font-medium mb-1">
+                  Alterações pendentes:
+                </p>
+                <div className="space-y-0.5">
+                  {Object.entries(categoryOverrides).map(([from, to]) => {
+                    const affectedCount = result.summary.categoryCounts[from] ?? 0;
+                    return (
+                      <p key={from} className="text-xs text-emerald-600">
+                        {from} → {to} ({affectedCount} transações)
+                      </p>
+                    );
+                  })}
                 </div>
               </div>
-            );
-          })}
-        </div>
+            )}
+
+            <button
+              onClick={handleConfirmCategories}
+              className="w-full mt-4 flex items-center justify-center gap-2 bg-emerald-500 text-white text-sm font-semibold py-3 rounded-xl hover:bg-emerald-600 transition-all"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Confirmar categorias
+            </button>
+          </>
+        ) : (
+          <div className="space-y-2">
+            {topCategories.map(([category, count]) => {
+              const percentage = Math.round((count / result.imported.length) * 100);
+              return (
+                <div key={category} className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-gray-700">{category}</span>
+                      <span className="text-xs text-gray-400">{count}x</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-400 rounded-full"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Debug Info (temporary) */}
@@ -925,31 +1052,44 @@ function ImportPreview({
         </div>
       )}
 
-      {/* Import Button */}
-      {saved ? (
-        <div className="w-full flex items-center justify-center gap-3 bg-emerald-100 text-emerald-700 font-semibold py-4 rounded-2xl">
-          <CheckCircle2 className="w-5 h-5" />
-          {result.imported.length} transações importadas com sucesso!
-        </div>
-      ) : (
-        <button
-          className="w-full flex items-center justify-center gap-3 bg-emerald-500 text-white font-semibold py-4 rounded-2xl hover:bg-emerald-600 disabled:opacity-50 transition-all"
-          onClick={handleSaveToDatabase}
-          disabled={saving}
-        >
-          {saving ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              A guardar...
-            </>
+      {/* Import Button — only after categories are confirmed */}
+      {categoriesConfirmed && (
+        <>
+          {saved ? (
+            <div className="w-full flex items-center justify-center gap-3 bg-emerald-100 text-emerald-700 font-semibold py-4 rounded-2xl">
+              <CheckCircle2 className="w-5 h-5" />
+              {result.imported.length} transações importadas com sucesso!
+            </div>
           ) : (
-            <>
-              <Check className="w-5 h-5" />
-              Importar {result.imported.length} transações
-            </>
+            <button
+              className="w-full flex items-center justify-center gap-3 bg-emerald-500 text-white font-semibold py-4 rounded-2xl hover:bg-emerald-600 disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/20"
+              onClick={handleSaveToDatabase}
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  A guardar...
+                </>
+              ) : (
+                <>
+                  <Check className="w-5 h-5" />
+                  Importar {result.imported.length} transações
+                </>
+              )}
+            </button>
           )}
-        </button>
+        </>
       )}
+
+      {/* Generate PDF Report Button */}
+      <button
+        className="w-full flex items-center justify-center gap-3 bg-white text-gray-700 font-semibold py-4 rounded-2xl border border-gray-200 hover:bg-gray-50 transition-all"
+        onClick={() => generateImportPDF(result)}
+      >
+        <span className="text-lg">📄</span>
+        Gerar Relatório
+      </button>
 
       {saveError && (
         <div className="flex items-start gap-3 bg-red-50 rounded-2xl p-4 border border-red-100">
