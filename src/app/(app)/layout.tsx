@@ -6,7 +6,7 @@ import { BottomNav } from "@/components/bottom-nav";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen pb-20">
-      <main className="max-w-lg lg:max-w-2xl mx-auto">{children}</main>
+      <main className="max-w-screen-sm mx-auto px-4">{children}</main>
       <FeedbackButton appName="BUDGY" appColor="#10B981" />
       <BottomNav />
     </div>

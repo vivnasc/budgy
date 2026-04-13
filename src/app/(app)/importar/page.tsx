@@ -52,7 +52,7 @@ export default function ImportarPage() {
   const [activeTab, setActiveTab] = useState<Tab>("sms");
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div>
       {/* Header */}
       <header className="bg-white border-b border-gray-100 px-4 pt-12 pb-4">
         <div className="flex items-center gap-3 mb-4">
