@@ -532,6 +532,35 @@ export async function parseExcelFile(
       return emptyResult("Ficheiro Excel vazio");
     }
 
+    if (format === "mobills") {
+      // Mobills Excel may have multiple sheets (Expenses, Incomes, Transfers)
+      // Read ALL sheets and combine them
+      const { parseMobillsCSV } = await import("./mobills-import");
+      const allCSVParts: string[] = [];
+
+      for (const sheetName of workbook.SheetNames) {
+        const ws = workbook.Sheets[sheetName];
+        if (!ws) continue;
+        const csv = XLSX.utils.sheet_to_csv(ws, { FS: "," });
+        const lines = csv.split("\n").filter((l) => l.trim().length > 0);
+        if (lines.length < 2) continue;
+        allCSVParts.push(csv);
+      }
+
+      if (allCSVParts.length === 0) {
+        return emptyResult("Ficheiro Excel vazio");
+      }
+
+      if (allCSVParts.length === 1) {
+        // Single sheet — parse directly
+        return parseMobillsCSV(allCSVParts[0]!);
+      }
+
+      // Multiple sheets — parse each and merge results
+      const results = allCSVParts.map((csv) => parseMobillsCSV(csv));
+      return mergeImportResults(results);
+    }
+
     const worksheet = workbook.Sheets[firstSheetName];
     if (!worksheet) {
       return emptyResult("Folha de cálculo vazia");
@@ -539,12 +568,6 @@ export async function parseExcelFile(
 
     // Convert to CSV then parse with appropriate parser
     const csvContent = XLSX.utils.sheet_to_csv(worksheet, { FS: "," });
-
-    if (format === "mobills") {
-      // Mobills Excel has same structure as CSV
-      const { parseMobillsCSV } = await import("./mobills-import");
-      return parseMobillsCSV(csvContent);
-    }
 
     if (format === "standard-bank") {
       return parseStandardBankCSV(csvContent);
@@ -561,6 +584,69 @@ export async function parseExcelFile(
   } catch {
     return emptyResult("Erro ao ler ficheiro Excel. Verifica se o formato está correcto.");
   }
+}
+
+function mergeImportResults(results: ImportResult[]): ImportResult {
+  const merged: ImportResult = {
+    success: false,
+    total: 0,
+    imported: [],
+    skipped: 0,
+    errors: [],
+    categoryMapping: {},
+    accountsFound: [],
+    dateRange: null,
+    summary: { totalIncome: 0, totalExpenses: 0, totalTransfers: 0, categoryCounts: {} },
+  };
+
+  let minDate = "";
+  let maxDate = "";
+  const accountsSet = new Set<string>();
+  const debugHeaders: string[] = [];
+  const debugRawCategoryCounts: Record<string, number> = {};
+
+  for (const r of results) {
+    if (!r.success) continue;
+    merged.success = true;
+    merged.total += r.total;
+    merged.imported.push(...r.imported);
+    merged.skipped += r.skipped;
+    merged.errors.push(...r.errors);
+    Object.assign(merged.categoryMapping, r.categoryMapping);
+    r.accountsFound.forEach((a) => accountsSet.add(a));
+    merged.summary.totalIncome += r.summary.totalIncome;
+    merged.summary.totalExpenses += r.summary.totalExpenses;
+    merged.summary.totalTransfers += r.summary.totalTransfers;
+    for (const [cat, count] of Object.entries(r.summary.categoryCounts)) {
+      merged.summary.categoryCounts[cat] = (merged.summary.categoryCounts[cat] || 0) + count;
+    }
+    if (r.dateRange) {
+      if (!minDate || r.dateRange.from < minDate) minDate = r.dateRange.from;
+      if (!maxDate || r.dateRange.to > maxDate) maxDate = r.dateRange.to;
+    }
+    // Merge debug info
+    if (r.debug) {
+      if (debugHeaders.length === 0) debugHeaders.push(...r.debug.detectedHeaders);
+      for (const [cat, count] of Object.entries(r.debug.rawCategoryCounts)) {
+        debugRawCategoryCounts[cat] = (debugRawCategoryCounts[cat] || 0) + count;
+      }
+    }
+  }
+
+  merged.accountsFound = Array.from(accountsSet);
+  merged.dateRange = minDate && maxDate ? { from: minDate, to: maxDate } : null;
+
+  // Merge debug from first successful result + combined raw categories
+  const firstDebug = results.find((r) => r.debug)?.debug;
+  if (firstDebug) {
+    merged.debug = {
+      ...firstDebug,
+      rawCategoryCounts: debugRawCategoryCounts,
+      detectedHeaders: debugHeaders.length > 0 ? debugHeaders : firstDebug.detectedHeaders,
+    };
+  }
+
+  return merged;
 }
 
 // ─── Standard Bank Parser ───────────────────────────────────────────────────

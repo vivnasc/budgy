@@ -10,6 +10,8 @@
  * Also handles Mobills Excel (.xlsx) format with the same columns.
  */
 
+import { autoCategorize } from "./auto-categorize";
+
 export interface MobillsTransaction {
   date: string;
   description: string;
@@ -321,23 +323,55 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   "ajuste": "Ajuste",
 };
 
-function mapCategory(mobillsCategory: string): { mapped: string; needsReview: boolean } {
-  const normalized = mobillsCategory.toLowerCase().trim();
+function normalizeForMapping(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
 
-  // Direct match
-  if (MOBILLS_CATEGORY_MAP[normalized]) {
-    return { mapped: MOBILLS_CATEGORY_MAP[normalized], needsReview: false };
-  }
+function mapCategory(
+  mobillsCategory: string,
+  subcategory?: string,
+  description?: string,
+  type?: "income" | "expense" | "transfer"
+): { mapped: string; needsReview: boolean } {
+  // Try category first, then subcategory
+  const candidates = [
+    mobillsCategory,
+    subcategory,
+  ].filter((c): c is string => !!c && c.length > 0);
 
-  // Partial match - check if any key is contained in the category name
-  for (const [key, value] of Object.entries(MOBILLS_CATEGORY_MAP)) {
-    if (normalized.includes(key) || key.includes(normalized)) {
-      return { mapped: value, needsReview: false };
+  for (const candidate of candidates) {
+    const normalized = normalizeForMapping(candidate);
+
+    // Direct match
+    if (MOBILLS_CATEGORY_MAP[normalized]) {
+      return { mapped: MOBILLS_CATEGORY_MAP[normalized], needsReview: false };
+    }
+
+    // Partial match (min 3 chars to avoid false positives)
+    for (const [key, value] of Object.entries(MOBILLS_CATEGORY_MAP)) {
+      if (key.length >= 3 && normalized.includes(key)) {
+        return { mapped: value, needsReview: false };
+      }
+      if (normalized.length >= 3 && key.includes(normalized)) {
+        return { mapped: value, needsReview: false };
+      }
     }
   }
 
-  // No match found — needs review
-  return { mapped: mobillsCategory, needsReview: true };
+  // Fallback: auto-categorize from description (merchant name matching)
+  if (description && description.length > 1) {
+    const result = autoCategorize(description, type || "expense");
+    if (result.confidence >= 0.7 && result.category !== "Outros" && result.category !== "Outro Rendimento") {
+      return { mapped: result.category, needsReview: false };
+    }
+  }
+
+  // No match found — default to Outros
+  return { mapped: "Outros", needsReview: true };
 }
 
 // ─── CSV Parser ──────────────────────────────────────────────────────────────
@@ -412,9 +446,11 @@ const HEADER_MAP: Record<string, string> = {
 
 function mapHeaders(headers: string[]): Record<number, string> {
   const mapping: Record<number, string> = {};
+  // Sort keys by length (longest first) so "subcategory" matches before "category"
+  const sortedEntries = Object.entries(HEADER_MAP).sort((a, b) => b[0].length - a[0].length);
   for (let i = 0; i < headers.length; i++) {
     const normalized = normalizeHeader(headers[i] ?? "");
-    for (const [key, field] of Object.entries(HEADER_MAP)) {
+    for (const [key, field] of sortedEntries) {
       if (normalized.includes(key)) {
         mapping[i] = field;
         break;
@@ -579,7 +615,7 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       }
 
       const originalCategory = row.category || "Outros";
-      const { mapped, needsReview } = mapCategory(originalCategory);
+      const { mapped, needsReview } = mapCategory(originalCategory, row.subcategory, row.description, type);
 
       // Track category mapping
       if (originalCategory !== mapped) {
