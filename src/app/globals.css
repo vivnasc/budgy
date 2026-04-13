@@ -4,43 +4,35 @@
 
 @layer base {
   :root {
-    /* ─── Dinheiro Green Theme ─── */
+    /* ─── Dark Premium Fintech Theme ─── */
     --color-dinheiro: #10B981;
-    --color-dinheiro-light: #ECFDF5;
+    --color-dinheiro-light: #10B981;
     --color-dinheiro-dark: #064E3B;
 
     --color-primary: #10B981;
-    --color-primary-light: #D1FAE5;
+    --color-primary-light: rgba(16, 185, 129, 0.15);
     --color-primary-dark: #047857;
 
-    --color-background: #F9FAFB;
-    --color-surface: #FFFFFF;
-    --color-surface-elevated: #FFFFFF;
-    --color-text-primary: #111827;
-    --color-text-secondary: #6B7280;
-    --color-text-muted: #9CA3AF;
-    --color-border: #E5E7EB;
+    /* ─── Dark backgrounds (rich, not pure black) ─── */
+    --color-background: #0F172A;
+    --color-background-end: #1E293B;
+    --color-surface: rgba(255, 255, 255, 0.05);
+    --color-surface-elevated: rgba(255, 255, 255, 0.08);
+    --color-text-primary: #F1F5F9;
+    --color-text-secondary: #94A3B8;
+    --color-text-muted: #64748B;
+    --color-border: rgba(255, 255, 255, 0.1);
 
     /* ─── Semantic Colors ─── */
-    --color-income: #10B981;
-    --color-expense: #EF4444;
-    --color-transfer: #6366F1;
-    --color-warning: #F59E0B;
-    --color-info: #3B82F6;
+    --color-income: #34D399;
+    --color-expense: #F87171;
+    --color-transfer: #818CF8;
+    --color-warning: #FBBF24;
+    --color-info: #60A5FA;
 
     /* ─── Spacing ─── */
     --nav-height: 4.5rem;
     --safe-bottom: env(safe-area-inset-bottom, 0px);
-  }
-
-  .dark {
-    --color-background: #0F1714;
-    --color-surface: #1A2420;
-    --color-surface-elevated: #223029;
-    --color-text-primary: #F9FAFB;
-    --color-text-secondary: #9CA3AF;
-    --color-text-muted: #6B7280;
-    --color-border: #374151;
   }
 }
 
@@ -51,8 +43,12 @@
   }
 
   body {
-    @apply bg-[var(--color-background)] text-[var(--color-text-primary)] antialiased;
+    @apply text-[var(--color-text-primary)] antialiased;
+    background: linear-gradient(165deg, var(--color-background) 0%, var(--color-background-end) 50%, var(--color-background) 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    letter-spacing: -0.01em;
     padding-bottom: calc(var(--nav-height) + var(--safe-bottom));
   }
 
@@ -68,43 +64,62 @@
 
 @layer components {
   .card {
-    @apply bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-sm;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1rem;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    box-shadow: 0 0 0 0 transparent;
   }
 
   .card-elevated {
-    @apply bg-[var(--color-surface-elevated)] rounded-2xl shadow-soft;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+
+  .glass {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
   }
 
   .btn-primary {
-    @apply bg-primary-500 text-white font-semibold py-3 px-6 rounded-xl
-           hover:bg-primary-600 active:bg-primary-700
+    @apply bg-emerald-500 text-white font-semibold py-3 px-6 rounded-xl
+           hover:bg-emerald-400 active:bg-emerald-600
            transition-colors duration-150 ease-in-out;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
   }
 
   .btn-secondary {
-    @apply bg-primary-50 text-primary-700 font-semibold py-3 px-6 rounded-xl
-           hover:bg-primary-100 active:bg-primary-200
+    background: rgba(16, 185, 129, 0.12);
+    @apply text-emerald-400 font-semibold py-3 px-6 rounded-xl
+           hover:bg-emerald-500/20 active:bg-emerald-500/25
            transition-colors duration-150 ease-in-out;
   }
 
   .amount-income {
-    @apply text-emerald-600 font-semibold;
+    @apply text-emerald-400 font-semibold;
   }
 
   .amount-expense {
-    @apply text-red-500 font-semibold;
+    @apply text-red-400 font-semibold;
   }
 
   .amount-transfer {
-    @apply text-indigo-500 font-semibold;
+    @apply text-indigo-400 font-semibold;
   }
 
   .fab {
     @apply fixed bottom-24 right-4 z-40 w-14 h-14
-           bg-primary-500 text-white rounded-full shadow-lg
+           bg-emerald-500 text-white rounded-full
            flex items-center justify-center
-           hover:bg-primary-600 active:bg-primary-700 active:scale-95
+           hover:bg-emerald-400 active:bg-emerald-600 active:scale-95
            transition-all duration-150;
+    box-shadow: 0 0 30px rgba(16, 185, 129, 0.4), 0 4px 15px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -206,17 +221,197 @@
   }
 
   .shadow-soft {
-    box-shadow: 0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 2px 15px -3px rgba(0, 0, 0, 0.3), 0 10px 20px -2px rgba(0, 0, 0, 0.2);
   }
 
   .shadow-glow-emerald {
-    box-shadow: 0 0 40px rgba(16, 185, 129, 0.15), 0 0 80px rgba(16, 185, 129, 0.05);
+    box-shadow: 0 0 40px rgba(16, 185, 129, 0.2), 0 0 80px rgba(16, 185, 129, 0.08);
   }
 
   .gradient-text {
-    background: linear-gradient(135deg, #10B981, #059669);
+    background: linear-gradient(135deg, #34D399, #10B981);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+
+  .gradient-text-premium {
+    background: linear-gradient(135deg, #34D399, #10B981, #059669);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* ─── Dark Theme Overrides ───
+   Override common Tailwind light-mode bg classes used in pages
+   so everything adapts to dark without touching page files */
+
+/* Gray backgrounds → transparent/dark */
+.bg-gray-50 {
+  background-color: transparent !important;
+}
+
+.bg-gray-100 {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.bg-gray-200 {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* White backgrounds → glass surface */
+.bg-white {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.bg-white\/90 {
+  background: rgba(15, 23, 42, 0.85) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* Gray text → light text for dark mode */
+.text-gray-900 {
+  color: #F1F5F9 !important;
+}
+
+.text-gray-800 {
+  color: #E2E8F0 !important;
+}
+
+.text-gray-700 {
+  color: #CBD5E1 !important;
+}
+
+.text-gray-600 {
+  color: #94A3B8 !important;
+}
+
+.text-gray-500 {
+  color: #64748B !important;
+}
+
+/* Gray borders → glass borders */
+.border-gray-100,
+.border-gray-200 {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.border-gray-300 {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Divide colors */
+.divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+.divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Light accent backgrounds → dark accent glass */
+.bg-primary-50,
+.bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.08) !important;
+}
+
+.bg-primary-100 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+
+.border-primary-100,
+.border-emerald-100 {
+  border-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+/* Gradient overrides for accent sections */
+.from-primary-50 {
+  --tw-gradient-from: rgba(16, 185, 129, 0.08) !important;
+}
+
+.to-emerald-50 {
+  --tw-gradient-to: rgba(16, 185, 129, 0.04) !important;
+}
+
+.from-amber-50 {
+  --tw-gradient-from: rgba(251, 191, 36, 0.08) !important;
+}
+
+.to-yellow-50,
+.to-orange-50 {
+  --tw-gradient-to: rgba(251, 191, 36, 0.04) !important;
+}
+
+.border-amber-100 {
+  border-color: rgba(251, 191, 36, 0.15) !important;
+}
+
+/* Primary text overrides for dark */
+.text-primary-600 {
+  color: #34D399 !important;
+}
+
+.text-primary-700 {
+  color: #10B981 !important;
+}
+
+/* Shadow overrides → dark shadows */
+.shadow-xl {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+}
+
+.shadow-2xl {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5) !important;
+}
+
+.shadow-lg {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Keep emerald shadow on FAB-like elements */
+.shadow-primary-500\/30 {
+  --tw-shadow-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+/* Hover states for dark */
+.hover\:bg-gray-50:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.hover\:bg-gray-100:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.hover\:bg-gray-200:hover {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.hover\:text-gray-900:hover {
+  color: #F1F5F9 !important;
+}
+
+.hover\:text-gray-600:hover {
+  color: #94A3B8 !important;
+}
+
+.hover\:border-gray-300:hover {
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.hover\:shadow-xl:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Active states */
+.active\:bg-gray-50:active {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.active\:bg-gray-100:active {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Selection style */
+::selection {
+  background-color: rgba(16, 185, 129, 0.3);
+  color: #F1F5F9;
 }
