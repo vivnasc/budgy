@@ -830,6 +830,64 @@ function ImportPreview({
         </div>
       </div>
 
+      {/* Debug Info (temporary) */}
+      {result.debug && (
+        <div className="bg-yellow-50 rounded-2xl border border-yellow-200 p-5">
+          <h3 className="text-sm font-bold text-yellow-900 mb-3">🔍 Debug — Dados brutos do ficheiro</h3>
+
+          <div className="space-y-3 text-xs">
+            <div>
+              <p className="font-semibold text-yellow-800">Cabeçalhos detectados (linha {result.debug.headerRowIndex}):</p>
+              <p className="text-yellow-700 font-mono bg-yellow-100 p-2 rounded mt-1 break-all">
+                {result.debug.detectedHeaders.join(" | ")}
+              </p>
+            </div>
+
+            <div>
+              <p className="font-semibold text-yellow-800">Mapeamento de colunas:</p>
+              <div className="text-yellow-700 font-mono bg-yellow-100 p-2 rounded mt-1 space-y-0.5">
+                {Object.entries(result.debug.headerMapping).map(([header, field]) => (
+                  <div key={header}>{header} → {field}</div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <p className="font-semibold text-yellow-800">Categorias originais do ficheiro (contagem):</p>
+              <div className="text-yellow-700 font-mono bg-yellow-100 p-2 rounded mt-1 space-y-0.5">
+                {Object.entries(result.debug.rawCategoryCounts)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([cat, count]) => (
+                    <div key={cat}>&quot;{cat}&quot;: {count}x</div>
+                  ))}
+              </div>
+            </div>
+
+            {result.debug.rawCategorySample.length > 0 && (
+              <div>
+                <p className="font-semibold text-yellow-800">Amostra categorias/subcategorias:</p>
+                <div className="text-yellow-700 font-mono bg-yellow-100 p-2 rounded mt-1 flex flex-wrap gap-1">
+                  {result.debug.rawCategorySample.map((cat) => (
+                    <span key={cat} className="bg-yellow-200 px-1.5 py-0.5 rounded">{cat}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {result.debug.sampleRow && (
+              <div>
+                <p className="font-semibold text-yellow-800">1ª linha de dados:</p>
+                <div className="text-yellow-700 font-mono bg-yellow-100 p-2 rounded mt-1 space-y-0.5">
+                  {Object.entries(result.debug.sampleRow).map(([key, val]) => (
+                    <div key={key}><span className="text-yellow-900">{key}:</span> &quot;{val}&quot;</div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Accounts Found */}
       {result.accountsFound.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5">

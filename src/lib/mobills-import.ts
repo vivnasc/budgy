@@ -51,6 +51,14 @@ export interface ImportResult {
     totalTransfers: number;
     categoryCounts: Record<string, number>;
   };
+  debug?: {
+    detectedHeaders: string[];
+    headerMapping: Record<string, string>;
+    rawCategorySample: string[];
+    rawCategoryCounts: Record<string, number>;
+    headerRowIndex: number;
+    sampleRow?: Record<string, string>;
+  };
 }
 
 // ─── Mobills Category Mapping ────────────────────────────────────────────────
@@ -523,11 +531,14 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
   const categoryMapping: Record<string, string> = {};
   const accountsSet = new Set<string>();
   const categoryCounts: Record<string, number> = {};
+  const rawCategoryCounts: Record<string, number> = {};
+  const rawCategorySample: Set<string> = new Set();
   let totalIncome = 0;
   let totalExpenses = 0;
   let totalTransfers = 0;
   let minDate = "";
   let maxDate = "";
+  let sampleRow: Record<string, string> | undefined;
 
   // Parse data rows
   for (let i = 1; i < lines.length; i++) {
@@ -552,6 +563,21 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       const date = parseMobillsDate(row.date || "");
       const type = row.type ? parseTransactionType(row.type) : (rawAmount < 0 ? "expense" : "income");
       const amount = Math.abs(rawAmount);
+      // Debug: track raw category values from file
+      const rawCat = row.category ?? "";
+      const rawSubcat = row.subcategory ?? "";
+      const rawKey = rawCat || "(vazio)";
+      rawCategoryCounts[rawKey] = (rawCategoryCounts[rawKey] || 0) + 1;
+      if (rawCategorySample.size < 30) {
+        if (rawCat) rawCategorySample.add(rawCat);
+        if (rawSubcat) rawCategorySample.add(`[sub] ${rawSubcat}`);
+      }
+
+      // Save first row as sample for debugging
+      if (!sampleRow) {
+        sampleRow = { ...row };
+      }
+
       const originalCategory = row.category || "Outros";
       const { mapped, needsReview } = mapCategory(originalCategory);
 
@@ -593,6 +619,12 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
     }
   }
 
+  // Build readable header mapping for debug
+  const readableHeaderMap: Record<string, string> = {};
+  for (const [index, field] of Object.entries(headerMap)) {
+    readableHeaderMap[headers[parseInt(index)] ?? `col${index}`] = field;
+  }
+
   return {
     success: imported.length > 0,
     total: lines.length - 1,
@@ -607,6 +639,14 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       totalExpenses,
       totalTransfers,
       categoryCounts,
+    },
+    debug: {
+      detectedHeaders: headers.map((h) => h.replace(/^"|"$/g, "").trim()),
+      headerMapping: readableHeaderMap,
+      rawCategorySample: Array.from(rawCategorySample),
+      rawCategoryCounts,
+      headerRowIndex: headerIndex,
+      sampleRow,
     },
   };
 }
