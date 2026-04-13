@@ -645,7 +645,7 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       headerMapping: readableHeaderMap,
       rawCategorySample: Array.from(rawCategorySample),
       rawCategoryCounts,
-      headerRowIndex: headerIndex,
+      headerRowIndex: 0,
       sampleRow,
     },
   };
