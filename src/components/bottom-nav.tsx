@@ -72,7 +72,7 @@ export function BottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface)] border-t border-[var(--color-border)] px-2 pb-[var(--safe-bottom)]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/80 backdrop-blur-xl border-t border-white/10 px-2 pb-[var(--safe-bottom)]">
         <div className="flex items-center justify-around h-16 max-w-lg mx-auto">
           {NAV_ITEMS.map((item, index) => {
             // FAB button (center)
@@ -81,7 +81,7 @@ export function BottomNav() {
                 <button
                   key="fab"
                   onClick={() => setShowAddModal(true)}
-                  className="relative -mt-6 w-14 h-14 bg-primary-500 rounded-full flex items-center justify-center shadow-lg shadow-primary-500/30 active:scale-95 transition-transform"
+                  className="relative -mt-6 w-14 h-14 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/30 active:scale-95 transition-transform"
                 >
                   <Plus className="w-7 h-7 text-white" />
                 </button>
@@ -94,22 +94,21 @@ export function BottomNav() {
                 <button
                   key="more"
                   onClick={() => setShowMore(!showMore)}
-                  className={`flex flex-col items-center justify-center gap-0.5 w-16 py-1 rounded-xl transition-colors ${
+                  className={`relative flex flex-col items-center justify-center gap-0.5 w-16 py-1 rounded-xl transition-colors ${
                     isMoreActive || showMore
-                      ? "text-primary-600"
-                      : "text-gray-400 hover:text-gray-600"
+                      ? "text-emerald-400"
+                      : "text-gray-500 hover:text-gray-400"
                   }`}
                 >
-                  <div
-                    className={`p-1 rounded-lg transition-colors ${
-                      isMoreActive || showMore ? "bg-primary-50" : ""
-                    }`}
-                  >
+                  {(isMoreActive || showMore) && (
+                    <span className="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-emerald-400" />
+                  )}
+                  <div className="p-1 rounded-lg transition-colors">
                     <MoreHorizontal
                       className={`w-5 h-5 ${
                         isMoreActive || showMore
-                          ? "text-primary-600"
-                          : "text-gray-400"
+                          ? "text-emerald-400"
+                          : "text-gray-500"
                       }`}
                       strokeWidth={isMoreActive || showMore ? 2.5 : 2}
                     />
@@ -117,8 +116,8 @@ export function BottomNav() {
                   <span
                     className={`text-2xs font-medium ${
                       isMoreActive || showMore
-                        ? "text-primary-600"
-                        : "text-gray-400"
+                        ? "text-emerald-400"
+                        : "text-gray-500"
                     }`}
                   >
                     Mais
@@ -137,27 +136,26 @@ export function BottomNav() {
                 key={item.href}
                 href={item.href}
                 onClick={() => setShowMore(false)}
-                className={`flex flex-col items-center justify-center gap-0.5 w-16 py-1 rounded-xl transition-colors ${
+                className={`relative flex flex-col items-center justify-center gap-0.5 w-16 py-1 rounded-xl transition-colors ${
                   isActive
-                    ? "text-primary-600"
-                    : "text-gray-400 hover:text-gray-600"
+                    ? "text-emerald-400"
+                    : "text-gray-500 hover:text-gray-400"
                 }`}
               >
-                <div
-                  className={`p-1 rounded-lg transition-colors ${
-                    isActive ? "bg-primary-50" : ""
-                  }`}
-                >
+                {isActive && (
+                  <span className="absolute top-0 left-1/2 -translate-x-1/2 w-5 h-0.5 rounded-full bg-emerald-400" />
+                )}
+                <div className="p-1 rounded-lg transition-colors">
                   <item.icon
                     className={`w-5 h-5 ${
-                      isActive ? "text-primary-600" : "text-gray-400"
+                      isActive ? "text-emerald-400" : "text-gray-500"
                     }`}
                     strokeWidth={isActive ? 2.5 : 2}
                   />
                 </div>
                 <span
                   className={`text-2xs font-medium ${
-                    isActive ? "text-primary-600" : "text-gray-400"
+                    isActive ? "text-emerald-400" : "text-gray-500"
                   }`}
                 >
                   {item.label}
@@ -173,20 +171,20 @@ export function BottomNav() {
         <div className="fixed inset-0 z-40">
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setShowMore(false)}
           />
 
           {/* Menu Panel */}
-          <div className="absolute bottom-20 left-4 right-4 max-w-lg mx-auto bg-[var(--color-surface)] rounded-2xl shadow-xl border border-[var(--color-border)] overflow-hidden animate-in">
+          <div className="absolute bottom-20 left-4 right-4 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl rounded-2xl shadow-xl border border-white/10 overflow-hidden animate-in">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
-              <h3 className="text-sm font-bold">Mais opções</h3>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+              <h3 className="text-sm font-bold text-white">Mais opções</h3>
               <button
                 onClick={() => setShowMore(false)}
-                className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center"
+                className="w-7 h-7 bg-white/10 rounded-full flex items-center justify-center"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3.5 h-3.5 text-gray-400" />
               </button>
             </div>
 
@@ -203,8 +201,8 @@ export function BottomNav() {
                     onClick={() => setShowMore(false)}
                     className={`flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl transition-colors ${
                       isActive
-                        ? "bg-primary-50"
-                        : "hover:bg-gray-50 active:bg-gray-100"
+                        ? "bg-emerald-500/10"
+                        : "hover:bg-white/5 active:bg-white/10"
                     }`}
                   >
                     <div
@@ -215,8 +213,8 @@ export function BottomNav() {
                     <span
                       className={`text-2xs font-medium ${
                         isActive
-                          ? "text-primary-600"
-                          : "text-[var(--color-text-secondary)]"
+                          ? "text-emerald-400"
+                          : "text-gray-400"
                       }`}
                     >
                       {item.label}

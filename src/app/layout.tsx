@@ -36,7 +36,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#10B981",
+  themeColor: "#0F172A",
   viewportFit: "cover",
 };
 
@@ -52,7 +52,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
-      <body className="font-sans">
+      <body className="font-sans bg-[#0F172A]">
         <Analytics domain="budgy.app" />
         <ServiceWorkerRegister />
         <PWAInstallPrompt />

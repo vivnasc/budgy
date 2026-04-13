@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="relative">
-              <img src="/Budgy-favicon.jpeg" alt="BUDGY" className="w-9 h-9 rounded-xl shadow-md animate-bounce-slow" />
+              <Image src="/budgy-logo-64.webp" alt="BUDGY" width={36} height={36} className="w-9 h-9 rounded-xl shadow-md animate-bounce-slow" priority />
             </div>
             <span className="text-xl font-black tracking-tight text-gray-900">BUDGY</span>
           </Link>
@@ -92,7 +93,7 @@ export default function LandingPage() {
                     {/* App header */}
                     <div className="bg-emerald-500 px-5 pt-3 pb-5">
                       <div className="flex items-center gap-2 mb-3">
-                        <img src="/Budgy-favicon.jpeg" alt="" className="w-7 h-7 rounded-lg" />
+                        <Image src="/budgy-logo-64.webp" alt="" width={28} height={28} className="w-7 h-7 rounded-lg" />
                         <span className="text-white text-sm font-bold">BUDGY</span>
                       </div>
                       <p className="text-emerald-100 text-[10px]">Saldo Total</p>
@@ -304,7 +305,7 @@ export default function LandingPage() {
       <section className="bg-white py-20 sm:py-28">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
           <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-3xl p-10 sm:p-14 shadow-glow-emerald">
-            <img src="/Budgy-favicon.jpeg" alt="BUDGY" className="w-14 h-14 rounded-2xl shadow-lg mx-auto mb-6 animate-bounce-slow" />
+            <Image src="/budgy-logo-128.webp" alt="BUDGY" width={56} height={56} className="w-14 h-14 rounded-2xl shadow-lg mx-auto mb-6 animate-bounce-slow" />
             <blockquote className="text-xl sm:text-2xl text-gray-700 font-semibold leading-relaxed italic">
               &ldquo;A minha app deve saber ler as mensagens que os bancos me mandam
               e registar sozinha. Pedir apenas que eu valide.&rdquo;
@@ -347,7 +348,7 @@ export default function LandingPage() {
       <footer className="bg-gray-900 px-4 sm:px-6 py-10">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-2.5">
-            <img src="/Budgy-favicon.jpeg" alt="BUDGY" className="w-7 h-7 rounded-lg" />
+            <Image src="/budgy-logo-64.webp" alt="BUDGY" width={28} height={28} className="w-7 h-7 rounded-lg" />
             <span className="font-bold text-white">BUDGY</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-gray-500">
