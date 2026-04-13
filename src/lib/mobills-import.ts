@@ -169,6 +169,7 @@ const MOBILLS_CATEGORY_MAP: Record<string, string> = {
   // Subscrições & Digital
   "digital apps & services": "Subscrições",
   "apple bills": "Subscrições",
+  "apple bill": "Subscrições",
   "mensalidades coachme": "Subscrições",
   "subscrição": "Subscrições",
   "subscricao": "Subscrições",
@@ -331,6 +332,12 @@ function normalizeForMapping(text: string): string {
     .trim();
 }
 
+// Pre-build a normalized lookup map (accent-stripped keys)
+const NORMALIZED_CATEGORY_MAP: Record<string, string> = {};
+for (const [key, value] of Object.entries(MOBILLS_CATEGORY_MAP)) {
+  NORMALIZED_CATEGORY_MAP[normalizeForMapping(key)] = value;
+}
+
 function mapCategory(
   mobillsCategory: string,
   subcategory?: string,
@@ -346,13 +353,13 @@ function mapCategory(
   for (const candidate of candidates) {
     const normalized = normalizeForMapping(candidate);
 
-    // Direct match
-    if (MOBILLS_CATEGORY_MAP[normalized]) {
-      return { mapped: MOBILLS_CATEGORY_MAP[normalized], needsReview: false };
+    // Direct match (accent-stripped)
+    if (NORMALIZED_CATEGORY_MAP[normalized]) {
+      return { mapped: NORMALIZED_CATEGORY_MAP[normalized], needsReview: false };
     }
 
-    // Partial match (min 3 chars to avoid false positives)
-    for (const [key, value] of Object.entries(MOBILLS_CATEGORY_MAP)) {
+    // Partial match (min 3 chars, accent-stripped keys)
+    for (const [key, value] of Object.entries(NORMALIZED_CATEGORY_MAP)) {
       if (key.length >= 3 && normalized.includes(key)) {
         return { mapped: value, needsReview: false };
       }
