@@ -18,10 +18,13 @@ export function PWAInstallPrompt() {
 
   useEffect(() => {
     // Listen for install prompt
+    // Don't show if user already dismissed
+    const dismissed = localStorage.getItem("budgy-install-dismissed");
+    if (dismissed) return;
+
     const handler = (e: Event) => {
       e.preventDefault();
       setInstallPrompt(e as BeforeInstallPromptEvent);
-      // Show banner after a delay (don't show immediately on load)
       setTimeout(() => setShowBanner(true), 3000);
     };
 
@@ -103,7 +106,7 @@ export function PWAInstallPrompt() {
       {showBanner && installPrompt && (
         <div className="fixed bottom-24 left-4 right-4 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 animate-in">
           <button
-            onClick={() => setShowBanner(false)}
+            onClick={() => { setShowBanner(false); localStorage.setItem("budgy-install-dismissed", "1"); }}
             className="absolute top-3 right-3 w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center"
           >
             <X className="w-3.5 h-3.5 text-gray-500" />
@@ -126,7 +129,7 @@ export function PWAInstallPrompt() {
                   Instalar
                 </button>
                 <button
-                  onClick={() => setShowBanner(false)}
+                  onClick={() => { setShowBanner(false); localStorage.setItem("budgy-install-dismissed", "1"); }}
                   className="px-4 bg-gray-100 text-gray-600 text-xs font-semibold py-2.5 rounded-xl hover:bg-gray-200 transition-colors"
                 >
                   Agora não
