@@ -83,7 +83,6 @@ export async function POST(request: Request) {
         (tx: Record<string, unknown>) => ({
           ...tx,
           user_id: user.id,
-          created_by: user.id,
         })
       );
 
@@ -109,7 +108,6 @@ export async function POST(request: Request) {
       const transaction = {
         ...body.transaction,
         user_id: user.id,
-        created_by: user.id,
       };
 
       const { data, error } = await supabase
