@@ -69,7 +69,7 @@ function useSupabaseQuery<T>(
     fetcher(user.id).then(({ data: d, error: e }) => {
       if (cancelled) return;
       setData(d);
-      setError(e ? String(e) : null);
+      setError(e ? stringifyError(e) : null);
       setLoading(false);
     });
 
@@ -209,6 +209,24 @@ export function useDashboard() {
   return { data, loading, refetch };
 }
 
+function stringifyError(e: unknown): string {
+  if (!e) return "";
+  if (typeof e === "string") return e;
+  if (e instanceof Error) return e.message;
+  const obj = e as { message?: string; code?: string; details?: string; hint?: string };
+  const parts: string[] = [];
+  if (obj.code) parts.push(`[${obj.code}]`);
+  if (obj.message) parts.push(obj.message);
+  if (obj.details) parts.push(obj.details);
+  if (obj.hint) parts.push(`(${obj.hint})`);
+  if (parts.length > 0) return parts.join(" ");
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
+}
+
 // ─── Total de transações + ultima data + erro (diagnóstico) ────────────────
 export function useTransactionStats() {
   const supabase = useSupabase();
@@ -228,8 +246,7 @@ export function useTransactionStats() {
       setCount(statsRes.count);
       setLatestDate(dateRes.data);
       const e = statsRes.error || dateRes.error;
-      // Supabase errors são objectos {message,code,...}
-      if (e) setError((e as { message?: string }).message ?? String(e));
+      if (e) setError(stringifyError(e));
     });
     return () => { cancelled = true; };
   }, [user, supabase]);
