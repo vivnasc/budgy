@@ -77,7 +77,7 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
-    // Bulk insert
+    // Bulk insert with duplicate detection
     if (body.transactions && Array.isArray(body.transactions)) {
       const transactions = body.transactions.map(
         (tx: Record<string, unknown>) => ({
@@ -86,10 +86,40 @@ export async function POST(request: Request) {
         })
       );
 
+      // Fetch existing transactions for this user to detect duplicates
+      const { data: existing } = await supabase
+        .schema("money_schema")
+        .from("transactions")
+        .select("date, amount, description, type")
+        .eq("user_id", user.id);
+
+      const existingKeys = new Set(
+        (existing || []).map((tx: { date?: string; amount?: number; description?: string; type?: string }) =>
+          `${tx.date}|${tx.amount}|${(tx.description || "").toLowerCase().trim()}|${tx.type}`
+        )
+      );
+
+      const unique = transactions.filter((tx: { date?: unknown; amount?: unknown; description?: unknown; type?: unknown }) => {
+        const key = `${tx.date}|${tx.amount}|${(String(tx.description || "")).toLowerCase().trim()}|${tx.type}`;
+        return !existingKeys.has(key);
+      });
+
+      const duplicates = transactions.length - unique.length;
+
+      if (unique.length === 0) {
+        return NextResponse.json({
+          success: true,
+          count: 0,
+          duplicates,
+          transactions: [],
+          message: `${duplicates} transações já existem. Nada importado.`,
+        });
+      }
+
       const { data, error } = await supabase
         .schema("money_schema")
         .from("transactions")
-        .insert(transactions)
+        .insert(unique)
         .select();
 
       if (error) {
@@ -99,7 +129,11 @@ export async function POST(request: Request) {
       return NextResponse.json({
         success: true,
         count: data?.length || 0,
+        duplicates,
         transactions: data,
+        message: duplicates > 0
+          ? `${data?.length} importadas, ${duplicates} duplicadas ignoradas.`
+          : undefined,
       });
     }
 
