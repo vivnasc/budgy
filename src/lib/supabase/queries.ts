@@ -74,7 +74,7 @@ export async function getTransactions(
   let query = supabase
     .schema("money_schema")
     .from("transactions")
-    .select("*, categories(*), accounts(*)", { count: "exact" })
+    .select("*, categories(*), accounts!transactions_account_id_fkey(*)", { count: "exact" })
     .eq("user_id", userId)
     .order("date", { ascending: false })
     .range(offset, offset + limit - 1);
@@ -92,7 +92,7 @@ export async function createTransaction(supabase: SupabaseClient, userId: string
     .schema("money_schema")
     .from("transactions")
     .insert({ ...tx, user_id: userId })
-    .select("*, categories(*), accounts(*)")
+    .select("*, categories(*), accounts!transactions_account_id_fkey(*)")
     .single();
 
   return { data: data as Transaction | null, error };
