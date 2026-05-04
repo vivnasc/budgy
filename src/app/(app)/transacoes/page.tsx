@@ -121,7 +121,7 @@ export default function TransacoesPage() {
   return (
     <div className="min-h-screen pb-4">
       {/* Header */}
-      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 pt-12 pb-4 sticky top-0 z-30">
+      <header className="bg-[var(--color-surface)] border-b border-[var(--color-border)] px-4 pt-6 pb-4 rounded-2xl">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold">Transacções</h1>
           <button
