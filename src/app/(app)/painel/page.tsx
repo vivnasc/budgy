@@ -141,16 +141,18 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen pb-4">
       {/* Header — Premium gradient with texture */}
-      <header className="relative bg-gradient-to-br from-emerald-600/90 to-teal-700/90 backdrop-blur-xl text-white px-4 pt-12 pb-6 rounded-b-3xl overflow-hidden">
+      <header className="relative bg-gradient-to-br from-emerald-600/90 to-teal-700/90 backdrop-blur-xl text-white px-4 pt-12 pb-6 rounded-b-3xl lg:rounded-2xl overflow-hidden">
         {/* Subtle pattern overlay */}
         <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "24px 24px" }} />
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <img src="/budgy-logo-64.webp" alt="BUDGY" className="w-10 h-10 rounded-xl shadow-lg ring-1 ring-white/20" />
+              {/* Hide logo on desktop — sidebar already shows it */}
+              <img src="/budgy-logo-64.webp" alt="BUDGY" className="w-10 h-10 rounded-xl shadow-lg ring-1 ring-white/20 lg:hidden" />
               <div>
                 <p className="text-emerald-100/70 text-sm">Ol&aacute;, bem-vindo</p>
-                <h1 className="text-xl font-bold tracking-tight">BUDGY</h1>
+                <h1 className="text-xl font-bold tracking-tight lg:hidden">BUDGY</h1>
+                <h1 className="hidden lg:block text-xl font-bold tracking-tight">Painel</h1>
               </div>
             </div>
             <button className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors">
@@ -167,7 +169,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="px-4 -mt-2 space-y-6">
+      <main className="-mt-2 space-y-6">
         {/* Empty State */}
         {isEmpty && (
           <section className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 text-center">
@@ -185,7 +187,7 @@ export default function DashboardPage() {
         {/* Quick Account Cards — Glass effect */}
         {accounts.length > 0 && (
           <section>
-            <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-none">
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
               {accounts.map((account) => {
                 const iconConfig = ACCOUNT_ICONS[account.type] ?? { icon: Wallet, color: "bg-gray-500" };
                 const Icon = iconConfig.icon;
@@ -206,60 +208,63 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* Financial Health Score — Prominent with glow */}
-        <section className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
-          <div className="flex items-center gap-4">
-            <div className="relative w-20 h-20 flex-shrink-0">
-              {/* Glow behind the score circle */}
-              <div
-                className="absolute inset-1 rounded-full blur-lg opacity-30"
-                style={{ backgroundColor: healthScore >= 70 ? "#10B981" : healthScore >= 40 ? "#F59E0B" : "#EF4444" }}
-              />
-              <svg className="w-20 h-20 -rotate-90 relative z-10" viewBox="0 0 100 100">
-                <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
-                <circle
-                  cx="50" cy="50" r="40" fill="none"
-                  stroke={healthScore >= 70 ? "#10B981" : healthScore >= 40 ? "#F59E0B" : "#EF4444"}
-                  strokeWidth="8"
-                  strokeDasharray={`${healthScore * 2.51} ${251 - healthScore * 2.51}`}
-                  strokeLinecap="round"
-                  className="transition-all duration-700"
+        {/* Health Score + Tip of Day — side by side on md+ */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Financial Health Score — Prominent with glow */}
+          <section className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
+            <div className="flex items-center gap-4">
+              <div className="relative w-20 h-20 flex-shrink-0">
+                {/* Glow behind the score circle */}
+                <div
+                  className="absolute inset-1 rounded-full blur-lg opacity-30"
+                  style={{ backgroundColor: healthScore >= 70 ? "#10B981" : healthScore >= 40 ? "#F59E0B" : "#EF4444" }}
                 />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center z-10">
-                <span className={`text-lg font-bold ${healthColor}`}>{healthScore}</span>
+                <svg className="w-20 h-20 -rotate-90 relative z-10" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="8" />
+                  <circle
+                    cx="50" cy="50" r="40" fill="none"
+                    stroke={healthScore >= 70 ? "#10B981" : healthScore >= 40 ? "#F59E0B" : "#EF4444"}
+                    strokeWidth="8"
+                    strokeDasharray={`${healthScore * 2.51} ${251 - healthScore * 2.51}`}
+                    strokeLinecap="round"
+                    className="transition-all duration-700"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center z-10">
+                  <span className={`text-lg font-bold ${healthColor}`}>{healthScore}</span>
+                </div>
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <Activity className="w-4 h-4 text-gray-400" />
+                  <h3 className="text-sm font-semibold text-white">Saúde Financeira</h3>
+                </div>
+                <p className={`text-xs font-bold ${healthColor}`}>{healthLabel}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Baseado no teu orçamento e padrão de gastos
+                </p>
               </div>
             </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <Activity className="w-4 h-4 text-gray-400" />
-                <h3 className="text-sm font-semibold text-white">Saúde Financeira</h3>
-              </div>
-              <p className={`text-xs font-bold ${healthColor}`}>{healthLabel}</p>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Baseado no teu orçamento e padrão de gastos
-              </p>
-            </div>
-          </div>
-        </section>
+          </section>
 
-        {/* Dica do Dia — Dark amber/gold tones */}
-        <section className="bg-amber-500/10 backdrop-blur-sm border border-amber-500/20 rounded-2xl p-4">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 bg-amber-500/20 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Lightbulb className="w-5 h-5 text-amber-400" />
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-xs font-bold text-amber-300">Dica do Dia</p>
-                <span className="text-xs bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-md font-medium">
-                  {dailyTip.category}
-                </span>
+          {/* Dica do Dia — Dark amber/gold tones */}
+          <section className="bg-amber-500/10 backdrop-blur-sm border border-amber-500/20 rounded-2xl p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 bg-amber-500/20 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Lightbulb className="w-5 h-5 text-amber-400" />
               </div>
-              <p className="text-sm text-amber-200/80 leading-relaxed">{dailyTip.tip}</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-xs font-bold text-amber-300">Dica do Dia</p>
+                  <span className="text-xs bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-md font-medium">
+                    {dailyTip.category}
+                  </span>
+                </div>
+                <p className="text-sm text-amber-200/80 leading-relaxed">{dailyTip.tip}</p>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        </div>
 
         {/* Income vs Expense Summary — Glass card, emerald/rose bars */}
         <section className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-4">
@@ -351,52 +356,57 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* Budget Progress */}
-        {budgetProgress.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-white">Orçamento</h2>
-              <a href="/orcamento" className="text-xs text-emerald-400 font-medium hover:text-emerald-300 transition-colors">Ver tudo</a>
-            </div>
-            <div className="space-y-3">
-              {budgetProgress.map((budget) => (
-                <BudgetProgress
-                  key={budget.category}
-                  category={budget.category}
-                  budgeted={budget.budgeted}
-                  spent={budget.spent}
-                  icon={budget.icon}
-                />
-              ))}
-            </div>
-          </section>
-        )}
+        {/* Budget Progress + Recent Transactions — side by side on lg+ */}
+        {(budgetProgress.length > 0 || recentTransactions.length > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Budget Progress */}
+            {budgetProgress.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-semibold text-white">Orçamento</h2>
+                  <a href="/orcamento" className="text-xs text-emerald-400 font-medium hover:text-emerald-300 transition-colors">Ver tudo</a>
+                </div>
+                <div className="space-y-3">
+                  {budgetProgress.map((budget) => (
+                    <BudgetProgress
+                      key={budget.category}
+                      category={budget.category}
+                      budgeted={budget.budgeted}
+                      spent={budget.spent}
+                      icon={budget.icon}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
 
-        {/* Recent Transactions */}
-        {recentTransactions.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-white">Transacções Recentes</h2>
-              <a href="/transacoes" className="text-xs text-emerald-400 font-medium hover:text-emerald-300 transition-colors">Ver todas</a>
-            </div>
-            <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl divide-y divide-white/5">
-              {recentTransactions.map((tx) => {
-                const icon = CATEGORY_ICONS[tx.categories?.name ?? ""] ?? Wallet;
-                return (
-                  <TransactionItem
-                    key={tx.id}
-                    description={tx.description ?? ""}
-                    category={tx.categories?.name ?? "Outros"}
-                    amount={tx.type === "expense" ? -tx.amount : tx.amount}
-                    type={tx.type}
-                    date={tx.date}
-                    account={tx.accounts?.name ?? ""}
-                    icon={icon}
-                  />
-                );
-              })}
-            </div>
-          </section>
+            {/* Recent Transactions */}
+            {recentTransactions.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-semibold text-white">Transacções Recentes</h2>
+                  <a href="/transacoes" className="text-xs text-emerald-400 font-medium hover:text-emerald-300 transition-colors">Ver todas</a>
+                </div>
+                <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl divide-y divide-white/5">
+                  {recentTransactions.map((tx) => {
+                    const icon = CATEGORY_ICONS[tx.categories?.name ?? ""] ?? Wallet;
+                    return (
+                      <TransactionItem
+                        key={tx.id}
+                        description={tx.description ?? ""}
+                        category={tx.categories?.name ?? "Outros"}
+                        amount={tx.type === "expense" ? -tx.amount : tx.amount}
+                        type={tx.type}
+                        date={tx.date}
+                        account={tx.accounts?.name ?? ""}
+                        icon={icon}
+                      />
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+          </div>
         )}
 
         {/* Trend indicator — dark premium */}
