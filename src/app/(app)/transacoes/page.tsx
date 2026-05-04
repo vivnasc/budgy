@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { TransactionItem } from "@/components/transaction-item";
 import { AddTransactionModal } from "@/components/add-transaction-modal";
-import { useTransactions, useLatestMonthOffset } from "@/hooks/use-supabase-data";
+import { useTransactions, useLatestMonthOffset, useTransactionStats } from "@/hooks/use-supabase-data";
 import type { Transaction } from "@/lib/supabase/types";
 
 type FilterType = "all" | "income" | "expense" | "transfer";
@@ -75,7 +75,9 @@ function formatDate(dateStr: string): string {
 
 export default function TransacoesPage() {
   const latestOffset = useLatestMonthOffset();
+  const stats = useTransactionStats();
   const [monthOffset, setMonthOffset] = useState<number | null>(null);
+  const [viewAll, setViewAll] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -89,7 +91,11 @@ export default function TransacoesPage() {
   const effectiveOffset = monthOffset ?? 0;
   const { from, to, label: currentMonth } = useMemo(() => getMonthDates(effectiveOffset), [effectiveOffset]);
   const typeFilter = filter === "all" ? undefined : filter;
-  const { data: transactions, loading } = useTransactions({ type: typeFilter, from, to, limit: 200 });
+  const { data: transactions, loading, error } = useTransactions(
+    viewAll
+      ? { type: typeFilter, limit: 5000 }
+      : { type: typeFilter, from, to, limit: 1000 }
+  );
 
   const filteredTransactions = useMemo(() => {
     if (!transactions) return [];
@@ -138,22 +144,34 @@ export default function TransacoesPage() {
           </div>
         )}
 
-        {/* Month Selector */}
-        <div className="flex items-center justify-center gap-4 mb-4">
+        {/* Month Selector + Toggle "Ver tudo" */}
+        <div className="flex items-center justify-center gap-3 mb-3">
           <button
             onClick={() => setMonthOffset((m) => (m ?? 0) - 1)}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+            disabled={viewAll}
+            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center disabled:opacity-30"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-sm font-semibold min-w-[140px] text-center capitalize">
+          <span className={`text-sm font-semibold min-w-[140px] text-center capitalize ${viewAll ? "opacity-40" : ""}`}>
             {currentMonth}
           </span>
           <button
             onClick={() => setMonthOffset((m) => Math.min((m ?? 0) + 1, 0))}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
+            disabled={viewAll}
+            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center disabled:opacity-30"
           >
             <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="flex items-center justify-center mb-3">
+          <button
+            onClick={() => setViewAll((v) => !v)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-full transition-colors ${
+              viewAll ? "bg-emerald-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            {viewAll ? "✓ A ver tudo" : "Ver histórico todo"}
           </button>
         </div>
 
@@ -182,6 +200,28 @@ export default function TransacoesPage() {
       </header>
 
       <main className="px-4 pt-4 space-y-4">
+        {/* Diagnóstico: total na BD + erro de query */}
+        {(stats.count !== null || stats.error || error) && (
+          <div className={`rounded-xl p-3 text-xs ${stats.error || error ? "bg-red-500/10 border border-red-500/20 text-red-300" : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"}`}>
+            {stats.error || error ? (
+              <>
+                <p className="font-semibold mb-1">Erro a ler da BD</p>
+                <p className="opacity-80 break-words">{stats.error || error}</p>
+              </>
+            ) : (
+              <p>
+                <span className="font-bold">{stats.count}</span> transações no histórico
+                {stats.latestDate && (
+                  <span className="opacity-70"> · última: {new Date(stats.latestDate + "T00:00:00").toLocaleDateString("pt-MZ")}</span>
+                )}
+                {transactions && (
+                  <span className="opacity-70"> · {transactions.length} a mostrar</span>
+                )}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Summary strip */}
         <div className="flex gap-3">
           <div className="flex-1 card p-3 text-center">

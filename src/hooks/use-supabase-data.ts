@@ -19,6 +19,7 @@ import {
   getCategories,
   getDashboardData,
   getLatestTransactionDate,
+  getTransactionStats,
   createTransaction as createTx,
   createTransactions as createTxs,
   createAccount as createAcct,
@@ -206,6 +207,34 @@ export function useDashboard() {
   }, [user, supabase, trigger]);
 
   return { data, loading, refetch };
+}
+
+// ─── Total de transações + ultima data + erro (diagnóstico) ────────────────
+export function useTransactionStats() {
+  const supabase = useSupabase();
+  const { user } = useUser();
+  const [count, setCount] = useState<number | null>(null);
+  const [latestDate, setLatestDate] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user || !supabase) return;
+    let cancelled = false;
+    Promise.all([
+      getTransactionStats(supabase, user.id),
+      getLatestTransactionDate(supabase, user.id),
+    ]).then(([statsRes, dateRes]) => {
+      if (cancelled) return;
+      setCount(statsRes.count);
+      setLatestDate(dateRes.data);
+      const e = statsRes.error || dateRes.error;
+      // Supabase errors são objectos {message,code,...}
+      if (e) setError((e as { message?: string }).message ?? String(e));
+    });
+    return () => { cancelled = true; };
+  }, [user, supabase]);
+
+  return { count, latestDate, error };
 }
 
 // ─── Latest transaction month offset ────────────────────────────────────────

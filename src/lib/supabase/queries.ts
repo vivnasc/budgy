@@ -132,6 +132,16 @@ export async function getLatestTransactionDate(supabase: SupabaseClient, userId:
   return { data: (data as { date: string } | null)?.date ?? null, error };
 }
 
+export async function getTransactionStats(supabase: SupabaseClient, userId: string) {
+  const { count, error } = await supabase
+    .schema("money_schema")
+    .from("transactions")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId);
+
+  return { count: count ?? 0, error };
+}
+
 // ─── Budgets ────────────────────────────────────────────────────────────────
 
 export async function getBudgets(supabase: SupabaseClient, userId: string) {
