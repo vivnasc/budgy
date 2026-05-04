@@ -15,24 +15,29 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ----------------------------------------------------------------------------
--- ENUM Types (DROP + CREATE para evitar "already exists")
+-- ENUM Types — CREATE só se não existir (NUNCA DROP, senão apaga colunas)
 -- ----------------------------------------------------------------------------
 
 DO $$ BEGIN
-  DROP TYPE IF EXISTS money_schema.account_type CASCADE;
-  CREATE TYPE money_schema.account_type AS ENUM ('bank', 'mpesa', 'cash', 'savings', 'investment');
+  IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'money_schema' AND t.typname = 'account_type') THEN
+    CREATE TYPE money_schema.account_type AS ENUM ('bank', 'mpesa', 'cash', 'savings', 'investment');
+  END IF;
 
-  DROP TYPE IF EXISTS money_schema.category_type CASCADE;
-  CREATE TYPE money_schema.category_type AS ENUM ('income', 'expense');
+  IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'money_schema' AND t.typname = 'category_type') THEN
+    CREATE TYPE money_schema.category_type AS ENUM ('income', 'expense');
+  END IF;
 
-  DROP TYPE IF EXISTS money_schema.transaction_type CASCADE;
-  CREATE TYPE money_schema.transaction_type AS ENUM ('income', 'expense', 'transfer');
+  IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'money_schema' AND t.typname = 'transaction_type') THEN
+    CREATE TYPE money_schema.transaction_type AS ENUM ('income', 'expense', 'transfer');
+  END IF;
 
-  DROP TYPE IF EXISTS money_schema.budget_period CASCADE;
-  CREATE TYPE money_schema.budget_period AS ENUM ('weekly', 'monthly', 'quarterly', 'annual');
+  IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'money_schema' AND t.typname = 'budget_period') THEN
+    CREATE TYPE money_schema.budget_period AS ENUM ('weekly', 'monthly', 'quarterly', 'annual');
+  END IF;
 
-  DROP TYPE IF EXISTS money_schema.debt_type CASCADE;
-  CREATE TYPE money_schema.debt_type AS ENUM ('owe', 'owed');
+  IF NOT EXISTS (SELECT 1 FROM pg_type t JOIN pg_namespace n ON n.oid = t.typnamespace WHERE n.nspname = 'money_schema' AND t.typname = 'debt_type') THEN
+    CREATE TYPE money_schema.debt_type AS ENUM ('owe', 'owed');
+  END IF;
 END $$;
 
 -- ============================================================================
@@ -158,6 +163,31 @@ CREATE TABLE IF NOT EXISTS money_schema.debt_records (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ============================================================================
+-- RECOVERY: garantir que colunas dependentes de ENUMs existem
+-- (caso uma migração anterior tenha feito DROP TYPE ... CASCADE)
+-- ============================================================================
+
+ALTER TABLE money_schema.accounts      ADD COLUMN IF NOT EXISTS type money_schema.account_type;
+UPDATE money_schema.accounts SET type = 'bank' WHERE type IS NULL;
+ALTER TABLE money_schema.accounts      ALTER COLUMN type SET NOT NULL;
+
+ALTER TABLE money_schema.categories    ADD COLUMN IF NOT EXISTS type money_schema.category_type;
+UPDATE money_schema.categories SET type = 'expense' WHERE type IS NULL;
+ALTER TABLE money_schema.categories    ALTER COLUMN type SET NOT NULL;
+
+ALTER TABLE money_schema.transactions  ADD COLUMN IF NOT EXISTS type money_schema.transaction_type;
+UPDATE money_schema.transactions SET type = 'expense' WHERE type IS NULL;
+ALTER TABLE money_schema.transactions  ALTER COLUMN type SET NOT NULL;
+
+ALTER TABLE money_schema.budgets       ADD COLUMN IF NOT EXISTS period money_schema.budget_period DEFAULT 'monthly';
+UPDATE money_schema.budgets SET period = 'monthly' WHERE period IS NULL;
+ALTER TABLE money_schema.budgets       ALTER COLUMN period SET NOT NULL;
+
+ALTER TABLE money_schema.debt_records  ADD COLUMN IF NOT EXISTS type money_schema.debt_type;
+UPDATE money_schema.debt_records SET type = 'owe' WHERE type IS NULL;
+ALTER TABLE money_schema.debt_records  ALTER COLUMN type SET NOT NULL;
 
 -- ============================================================================
 -- INDEXES (IF NOT EXISTS)
