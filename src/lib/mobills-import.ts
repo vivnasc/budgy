@@ -885,6 +885,11 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       }
 
       const date = parseMobillsDate(row.date || "");
+      // Skip footer/summary rows (e.g. "Total (incomes - expenses)") where date is not ISO
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        skipped++;
+        continue;
+      }
       const type = row.type ? parseTransactionType(row.type) : (rawAmount < 0 ? "expense" : "income");
       const amount = Math.abs(rawAmount);
       // Debug: track raw category values from file
