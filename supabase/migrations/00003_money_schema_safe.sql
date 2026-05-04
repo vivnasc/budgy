@@ -254,3 +254,30 @@ END $$;
 DROP POLICY IF EXISTS "categories_select_own" ON money_schema.categories;
 CREATE POLICY "categories_select_own" ON money_schema.categories FOR SELECT
   USING (is_system = true OR auth.uid() = user_id);
+
+-- ============================================================================
+-- GRANTS — expor money_schema ao PostgREST (anon/authenticated)
+-- Sem isto, o cliente Supabase apanha "permission denied for schema money_schema"
+-- IMPORTANTE: também tens de adicionar "money_schema" em
+-- Supabase Dashboard → Settings → API → Exposed schemas
+-- ============================================================================
+
+GRANT USAGE ON SCHEMA money_schema TO anon, authenticated, service_role;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA money_schema
+  TO anon, authenticated, service_role;
+
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA money_schema
+  TO anon, authenticated, service_role;
+
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA money_schema
+  TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA money_schema
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA money_schema
+  GRANT USAGE, SELECT ON SEQUENCES TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA money_schema
+  GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
