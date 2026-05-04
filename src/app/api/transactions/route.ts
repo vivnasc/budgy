@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     let query = supabase
       .schema("money_schema")
       .from("transactions")
-      .select("*, categories(*), accounts(*)")
+      .select("*, categories(*), accounts!transactions_account_id_fkey(*)")
       .eq("user_id", user.id)
       .order("date", { ascending: false })
       .range(offset, offset + limit - 1);
