@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -27,7 +27,7 @@ import {
   Banknote,
   ArrowUpRight,
 } from "lucide-react";
-import { useTransactions } from "@/hooks/use-supabase-data";
+import { useTransactions, useLatestMonthOffset } from "@/hooks/use-supabase-data";
 import type { Transaction } from "@/lib/supabase/types";
 
 const PIE_COLORS = ["#10B981", "#3B82F6", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#F97316", "#6366F1", "#14B8A6"];
@@ -157,9 +157,16 @@ function Legend({ data, total, max = 5 }: { data: Slice[]; total: number; max?: 
 }
 
 export default function RelatoriosPage() {
-  const [monthOffset, setMonthOffset] = useState(0);
-  const { from, to, label: currentMonth } = useMemo(() => getMonthDates(monthOffset), [monthOffset]);
-  const { from: prevFrom, to: prevTo } = useMemo(() => getMonthDates(monthOffset - 1), [monthOffset]);
+  const latestOffset = useLatestMonthOffset();
+  const [monthOffset, setMonthOffset] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (monthOffset === null && latestOffset !== null) setMonthOffset(latestOffset);
+  }, [latestOffset, monthOffset]);
+
+  const effectiveOffset = monthOffset ?? 0;
+  const { from, to, label: currentMonth } = useMemo(() => getMonthDates(effectiveOffset), [effectiveOffset]);
+  const { from: prevFrom, to: prevTo } = useMemo(() => getMonthDates(effectiveOffset - 1), [effectiveOffset]);
 
   const { data: transactions, loading } = useTransactions({ from, to, limit: 5000 });
   const { data: prevTransactions } = useTransactions({ from: prevFrom, to: prevTo, limit: 5000 });
@@ -206,11 +213,11 @@ export default function RelatoriosPage() {
 
         {/* Month selector */}
         <div className="flex items-center justify-center gap-4 mb-5">
-          <button onClick={() => setMonthOffset((m) => m - 1)} className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
+          <button onClick={() => setMonthOffset((m) => (m ?? 0) - 1)} className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors">
             <ChevronLeft className="w-4 h-4" />
           </button>
           <span className="text-sm font-semibold min-w-[160px] text-center capitalize">{currentMonth}</span>
-          <button onClick={() => setMonthOffset((m) => Math.min(m + 1, 0))} disabled={monthOffset >= 0} className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 disabled:opacity-30 flex items-center justify-center transition-colors">
+          <button onClick={() => setMonthOffset((m) => Math.min((m ?? 0) + 1, 0))} disabled={effectiveOffset >= 0} className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 disabled:opacity-30 flex items-center justify-center transition-colors">
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

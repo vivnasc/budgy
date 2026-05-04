@@ -18,6 +18,8 @@ import {
   getXitiqueGroups,
   getCategories,
   getDashboardData,
+  getLatestTransactionDate,
+  getTransactionStats,
   createTransaction as createTx,
   createTransactions as createTxs,
   createAccount as createAcct,
@@ -205,4 +207,63 @@ export function useDashboard() {
   }, [user, supabase, trigger]);
 
   return { data, loading, refetch };
+}
+
+// ─── Total de transações + ultima data + erro (diagnóstico) ────────────────
+export function useTransactionStats() {
+  const supabase = useSupabase();
+  const { user } = useUser();
+  const [count, setCount] = useState<number | null>(null);
+  const [latestDate, setLatestDate] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user || !supabase) return;
+    let cancelled = false;
+    Promise.all([
+      getTransactionStats(supabase, user.id),
+      getLatestTransactionDate(supabase, user.id),
+    ]).then(([statsRes, dateRes]) => {
+      if (cancelled) return;
+      setCount(statsRes.count);
+      setLatestDate(dateRes.data);
+      const e = statsRes.error || dateRes.error;
+      // Supabase errors são objectos {message,code,...}
+      if (e) setError((e as { message?: string }).message ?? String(e));
+    });
+    return () => { cancelled = true; };
+  }, [user, supabase]);
+
+  return { count, latestDate, error };
+}
+
+// ─── Latest transaction month offset ────────────────────────────────────────
+// Devolve o offset (em meses, relativo ao mês actual) do mês com a transação
+// mais recente. Útil para abrir relatórios/transações no mês onde há dados.
+export function useLatestMonthOffset() {
+  const supabase = useSupabase();
+  const { user } = useUser();
+  const [offset, setOffset] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!user || !supabase) {
+      setOffset(0);
+      return;
+    }
+    let cancelled = false;
+    getLatestTransactionDate(supabase, user.id).then(({ data }) => {
+      if (cancelled) return;
+      if (!data) {
+        setOffset(0);
+        return;
+      }
+      const d = new Date(data + "T00:00:00");
+      const now = new Date();
+      const diff = (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth());
+      setOffset(Math.min(diff, 0));
+    });
+    return () => { cancelled = true; };
+  }, [user, supabase]);
+
+  return offset;
 }
