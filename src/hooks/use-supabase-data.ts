@@ -18,6 +18,7 @@ import {
   getXitiqueGroups,
   getCategories,
   getDashboardData,
+  getLatestTransactionDate,
   createTransaction as createTx,
   createTransactions as createTxs,
   createAccount as createAcct,
@@ -205,4 +206,35 @@ export function useDashboard() {
   }, [user, supabase, trigger]);
 
   return { data, loading, refetch };
+}
+
+// ─── Latest transaction month offset ────────────────────────────────────────
+// Devolve o offset (em meses, relativo ao mês actual) do mês com a transação
+// mais recente. Útil para abrir relatórios/transações no mês onde há dados.
+export function useLatestMonthOffset() {
+  const supabase = useSupabase();
+  const { user } = useUser();
+  const [offset, setOffset] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!user || !supabase) {
+      setOffset(0);
+      return;
+    }
+    let cancelled = false;
+    getLatestTransactionDate(supabase, user.id).then(({ data }) => {
+      if (cancelled) return;
+      if (!data) {
+        setOffset(0);
+        return;
+      }
+      const d = new Date(data + "T00:00:00");
+      const now = new Date();
+      const diff = (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth());
+      setOffset(Math.min(diff, 0));
+    });
+    return () => { cancelled = true; };
+  }, [user, supabase]);
+
+  return offset;
 }

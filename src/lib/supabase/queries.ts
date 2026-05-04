@@ -119,6 +119,19 @@ export async function deleteTransaction(supabase: SupabaseClient, id: string) {
   return { error };
 }
 
+export async function getLatestTransactionDate(supabase: SupabaseClient, userId: string) {
+  const { data, error } = await supabase
+    .schema("money_schema")
+    .from("transactions")
+    .select("date")
+    .eq("user_id", userId)
+    .order("date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return { data: (data as { date: string } | null)?.date ?? null, error };
+}
+
 // ─── Budgets ────────────────────────────────────────────────────────────────
 
 export async function getBudgets(supabase: SupabaseClient, userId: string) {
@@ -207,9 +220,11 @@ export async function createXitiqueGroup(supabase: SupabaseClient, userId: strin
 // ─── Dashboard Aggregates ───────────────────────────────────────────────────
 
 export async function getDashboardData(supabase: SupabaseClient, userId: string) {
-  const now = new Date();
-  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]!;
-  const lastOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]!;
+  // Buscar a data da transação mais recente para mostrar o "mês actual" baseado em dados reais
+  const { data: latestDate } = await getLatestTransactionDate(supabase, userId);
+  const ref = latestDate ? new Date(latestDate + "T00:00:00") : new Date();
+  const firstOfMonth = new Date(ref.getFullYear(), ref.getMonth(), 1).toISOString().split("T")[0]!;
+  const lastOfMonth = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).toISOString().split("T")[0]!;
 
   const [accounts, transactions, budgets, goals, debts, xitique] = await Promise.all([
     getAccounts(supabase, userId),

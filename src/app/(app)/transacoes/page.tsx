@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { TransactionItem } from "@/components/transaction-item";
 import { AddTransactionModal } from "@/components/add-transaction-modal";
-import { useTransactions } from "@/hooks/use-supabase-data";
+import { useTransactions, useLatestMonthOffset } from "@/hooks/use-supabase-data";
 import type { Transaction } from "@/lib/supabase/types";
 
 type FilterType = "all" | "income" | "expense" | "transfer";
@@ -74,13 +74,20 @@ function formatDate(dateStr: string): string {
 }
 
 export default function TransacoesPage() {
-  const [monthOffset, setMonthOffset] = useState(0);
+  const latestOffset = useLatestMonthOffset();
+  const [monthOffset, setMonthOffset] = useState<number | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
 
-  const { from, to, label: currentMonth } = useMemo(() => getMonthDates(monthOffset), [monthOffset]);
+  // Saltar para o mês mais recente com dados na primeira carga
+  useEffect(() => {
+    if (monthOffset === null && latestOffset !== null) setMonthOffset(latestOffset);
+  }, [latestOffset, monthOffset]);
+
+  const effectiveOffset = monthOffset ?? 0;
+  const { from, to, label: currentMonth } = useMemo(() => getMonthDates(effectiveOffset), [effectiveOffset]);
   const typeFilter = filter === "all" ? undefined : filter;
   const { data: transactions, loading } = useTransactions({ type: typeFilter, from, to, limit: 200 });
 
@@ -134,7 +141,7 @@ export default function TransacoesPage() {
         {/* Month Selector */}
         <div className="flex items-center justify-center gap-4 mb-4">
           <button
-            onClick={() => setMonthOffset((m) => m - 1)}
+            onClick={() => setMonthOffset((m) => (m ?? 0) - 1)}
             className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -143,7 +150,7 @@ export default function TransacoesPage() {
             {currentMonth}
           </span>
           <button
-            onClick={() => setMonthOffset((m) => Math.min(m + 1, 0))}
+            onClick={() => setMonthOffset((m) => Math.min((m ?? 0) + 1, 0))}
             className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
           >
             <ChevronRight className="w-4 h-4" />
