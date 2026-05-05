@@ -8,6 +8,7 @@ interface TransactionItemProps {
   date: string;
   account: string;
   icon: React.ComponentType<{ className?: string }>;
+  onClick?: () => void;
 }
 
 export function TransactionItem({
@@ -18,6 +19,7 @@ export function TransactionItem({
   date,
   account,
   icon: Icon,
+  onClick,
 }: TransactionItemProps) {
   const formattedDate = new Date(date + "T00:00:00").toLocaleDateString(
     "pt-MZ",
@@ -51,7 +53,11 @@ export function TransactionItem({
         : "text-red-500";
 
   return (
-    <div className="flex items-center gap-3 p-3 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer">
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left flex items-center gap-3 p-3 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
+    >
       {/* Category Icon */}
       <div
         className={`w-10 h-10 ${iconBg} rounded-xl flex items-center justify-center flex-shrink-0`}
@@ -83,6 +89,6 @@ export function TransactionItem({
           {account}
         </span>
       </div>
-    </div>
+    </button>
   );
 }

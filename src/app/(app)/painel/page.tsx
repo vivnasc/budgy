@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { BalanceCard } from "@/components/balance-card";
 import { TransactionItem } from "@/components/transaction-item";
+import { TransactionDetailModal } from "@/components/transaction-detail-modal";
 import { BudgetProgress } from "@/components/budget-progress";
 import { useDashboard } from "@/hooks/use-supabase-data";
 import type { Account, Transaction, Budget, DebtRecord, XitiqueGroup } from "@/lib/supabase/types";
@@ -81,7 +82,8 @@ function getMonthLabel(referenceDate?: string | null): string {
 }
 
 export default function DashboardPage() {
-  const { data, loading } = useDashboard();
+  const { data, loading, refetch } = useDashboard();
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const latestDate = data?.transactions[0]?.date ?? null;
   const currentMonth = getMonthLabel(latestDate);
 
@@ -443,6 +445,7 @@ export default function DashboardPage() {
                         date={tx.date}
                         account={tx.accounts?.name ?? ""}
                         icon={icon}
+                        onClick={() => setSelectedTx(tx)}
                       />
                     );
                   })}
@@ -469,6 +472,15 @@ export default function DashboardPage() {
           </section>
         )}
       </main>
+
+      {/* Transaction Detail / Edit Modal */}
+      {selectedTx && (
+        <TransactionDetailModal
+          transaction={selectedTx}
+          onClose={() => setSelectedTx(null)}
+          onChanged={() => refetch()}
+        />
+      )}
     </div>
   );
 }

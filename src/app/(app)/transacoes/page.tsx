@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { TransactionItem } from "@/components/transaction-item";
 import { AddTransactionModal } from "@/components/add-transaction-modal";
+import { TransactionDetailModal } from "@/components/transaction-detail-modal";
 import { useTransactions, useLatestMonthOffset, useTransactionStats } from "@/hooks/use-supabase-data";
 import type { Transaction } from "@/lib/supabase/types";
 
@@ -82,6 +83,7 @@ export default function TransacoesPage() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
   // Saltar para o mês mais recente com dados na primeira carga
   useEffect(() => {
@@ -91,7 +93,7 @@ export default function TransacoesPage() {
   const effectiveOffset = monthOffset ?? 0;
   const { from, to, label: currentMonth } = useMemo(() => getMonthDates(effectiveOffset), [effectiveOffset]);
   const typeFilter = filter === "all" ? undefined : filter;
-  const { data: transactions, loading, error } = useTransactions(
+  const { data: transactions, loading, error, refetch } = useTransactions(
     viewAll
       ? { type: typeFilter, limit: 5000 }
       : { type: typeFilter, from, to, limit: 1000 }
@@ -286,6 +288,7 @@ export default function TransacoesPage() {
                       date={tx.date}
                       account={tx.accounts?.name ?? ""}
                       icon={icon}
+                      onClick={() => setSelectedTx(tx)}
                     />
                   );
                 })}
@@ -315,6 +318,15 @@ export default function TransacoesPage() {
       {/* Add Transaction Modal */}
       {showAddModal && (
         <AddTransactionModal onClose={() => setShowAddModal(false)} />
+      )}
+
+      {/* Transaction Detail / Edit Modal */}
+      {selectedTx && (
+        <TransactionDetailModal
+          transaction={selectedTx}
+          onClose={() => setSelectedTx(null)}
+          onChanged={() => refetch()}
+        />
       )}
     </div>
   );
