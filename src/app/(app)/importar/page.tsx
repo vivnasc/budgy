@@ -112,6 +112,8 @@ function ResetDataSection() {
   const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const [recat, setRecat] = useState<{ running: boolean; updated?: number; total?: number; err?: string }>({ running: false });
+
   const handleReset = async () => {
     setResetting(true);
     setErr(null);
@@ -133,8 +135,52 @@ function ResetDataSection() {
     }
   };
 
+  const handleRecategorize = async () => {
+    setRecat({ running: true });
+    try {
+      const res = await fetch("/api/transactions/recategorize", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setRecat({ running: false, updated: data.updated, total: data.total });
+      } else {
+        setRecat({ running: false, err: data.error || "Erro ao re-categorizar" });
+      }
+    } catch {
+      setRecat({ running: false, err: "Erro de rede" });
+    }
+  };
+
   return (
-    <div className="mt-10 pt-6 border-t border-gray-100">
+    <div className="mt-10 pt-6 border-t border-gray-100 space-y-4">
+      {/* Re-categorize existing transactions (no destructive action) */}
+      <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4">
+        <div className="flex items-start gap-3">
+          <Sparkles className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-blue-900">Re-categorizar transações</h3>
+            <p className="text-xs text-blue-700 mt-1 leading-relaxed">
+              Aplica as regras automáticas a todas as transações que já lá estão (útil se aparecem como &quot;Outros&quot; nos relatórios). Não apaga nada.
+            </p>
+            {recat.updated !== undefined ? (
+              <p className="text-xs text-emerald-700 font-semibold mt-3 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" /> {recat.updated} de {recat.total} transações actualizadas
+              </p>
+            ) : (
+              <button
+                onClick={handleRecategorize}
+                disabled={recat.running}
+                className="mt-3 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+              >
+                {recat.running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {recat.running ? "A processar..." : "Re-categorizar agora"}
+              </button>
+            )}
+            {recat.err && <p className="text-xs text-red-700 mt-2">{recat.err}</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Destructive: clear all data */}
       <div className="bg-red-50 rounded-2xl border border-red-100 p-4">
         <div className="flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
