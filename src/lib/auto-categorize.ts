@@ -173,6 +173,52 @@ const SYSTEM_RULES: CategorizationRule[] = [
   { pattern: "imposto de selo", isRegex: false, category: "Taxas Bancárias", confidence: 0.9, confirmCount: 0, source: "system" },
   { pattern: "anuidade", isRegex: false, category: "Taxas Bancárias", confidence: 0.9, confirmCount: 0, source: "system" },
   { pattern: "prestacao mensal emprestimo", isRegex: false, category: "Dívidas", confidence: 0.95, confirmCount: 0, source: "system" },
+
+  // ── Utilities (Mozambican household bills) ──
+  { pattern: "energia", isRegex: false, category: "Contas", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "factura agua", isRegex: false, category: "Contas", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "factura de agua", isRegex: false, category: "Contas", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "factura água", isRegex: false, category: "Contas", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "fatura agua", isRegex: false, category: "Contas", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "agua katembe", isRegex: false, category: "Contas", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "água ", isRegex: false, category: "Contas", confidence: 0.85, confirmCount: 0, source: "system" },
+  { pattern: "edm ", isRegex: false, category: "Contas", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "fipag", isRegex: false, category: "Contas", confidence: 0.95, confirmCount: 0, source: "system" },
+
+  // ── Education / Tuition ──
+  { pattern: "propina", isRegex: false, category: "Educação", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "propinas", isRegex: false, category: "Educação", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "woodrose", isRegex: false, category: "Educação", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "escola ", isRegex: false, category: "Educação", confidence: 0.85, confirmCount: 0, source: "system" },
+
+  // ── Health / Therapy ──
+  { pattern: "terapia da fala", isRegex: false, category: "Saúde", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "terapia", isRegex: false, category: "Saúde", confidence: 0.85, confirmCount: 0, source: "system" },
+  { pattern: "psicolog", isRegex: false, category: "Saúde", confidence: 0.9, confirmCount: 0, source: "system" },
+
+  // ── Family-specific (children's activities, family transfers) ──
+  { pattern: "futebol breno", isRegex: false, category: "Família", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "futebol", isRegex: false, category: "Lazer", confidence: 0.7, confirmCount: 0, source: "system" },
+  { pattern: "breno nascimento", isRegex: false, category: "Família", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "trf-breno", isRegex: false, category: "Família", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "transferência para breno", isRegex: false, category: "Família", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "creche cris", isRegex: false, category: "Família", confidence: 0.98, confirmCount: 0, source: "system" },
+  { pattern: "baby", isRegex: false, category: "Família", confidence: 0.7, confirmCount: 0, source: "system" },
+
+  // ── Home / Garden / Domestic services ──
+  { pattern: "jardineira", isRegex: false, category: "Casa", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "jardim", isRegex: false, category: "Casa", confidence: 0.85, confirmCount: 0, source: "system" },
+  { pattern: "limpeza", isRegex: false, category: "Casa", confidence: 0.85, confirmCount: 0, source: "system" },
+  { pattern: "empregada", isRegex: false, category: "Casa", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "rainbow nurseries", isRegex: false, category: "Casa", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "smartpools", isRegex: false, category: "Casa", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "home land", isRegex: false, category: "Casa", confidence: 0.9, confirmCount: 0, source: "system" },
+
+  // ── Personal income (side hustles / family income) ──
+  { pattern: "bruno income", isRegex: false, category: "Outro Rendimento", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "reembolso", isRegex: false, category: "Reembolso", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "devolução", isRegex: false, category: "Reembolso", confidence: 0.85, confirmCount: 0, source: "system" },
+  { pattern: "devolucao", isRegex: false, category: "Reembolso", confidence: 0.85, confirmCount: 0, source: "system" },
 ];
 
 // ─── Categorization Engine ───────────────────────────────────────────────────
