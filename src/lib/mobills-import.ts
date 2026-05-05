@@ -892,6 +892,20 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
         skipped++;
         continue;
       }
+
+      // Skip "Reajuste de saldo" / "Adjustment" rows — these are Mobills'
+      // manual balance corrections, not real income or expense. Including
+      // them would inflate receitas/despesas without matching Mobills.
+      const rawCatLower = (row.category || "").toLowerCase().trim();
+      if (
+        rawCatLower === "adjustment" ||
+        rawCatLower === "ajuste" ||
+        /reajuste de saldo|reajuste do saldo/i.test(row.description || "")
+      ) {
+        skipped++;
+        continue;
+      }
+
       const type = row.type ? parseTransactionType(row.type) : (rawAmount < 0 ? "expense" : "income");
       const amount = Math.abs(rawAmount);
       // Debug: track raw category values from file

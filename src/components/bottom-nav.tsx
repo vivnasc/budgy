@@ -58,7 +58,7 @@ const MORE_MENU_ITEMS = [
   { label: "Dívidas", icon: Heart, href: "/dividas", color: "bg-red-500" },
   { label: "Relatórios", icon: BarChart3, href: "/relatorios", color: "bg-purple-500" },
   { label: "Educação", icon: GraduationCap, href: "/educacao", color: "bg-teal-500" },
-  { label: "Definições", icon: Settings, href: "#settings", color: "bg-gray-500" },
+  { label: "Definições", icon: Settings, href: "/importar", color: "bg-gray-500" },
 ];
 
 export function BottomNav() {
@@ -67,7 +67,7 @@ export function BottomNav() {
   const [showAddModal, setShowAddModal] = useState(false);
 
   const isMoreActive = MORE_MENU_ITEMS.some(
-    (item) => item.href !== "#settings" && pathname.startsWith(item.href)
+    (item) => pathname.startsWith(item.href)
   );
 
   return (
@@ -191,13 +191,12 @@ export function BottomNav() {
             {/* Menu Grid */}
             <div className="grid grid-cols-4 gap-1 p-3">
               {MORE_MENU_ITEMS.map((item) => {
-                const isActive =
-                  item.href !== "#settings" && pathname.startsWith(item.href);
+                const isActive = pathname.startsWith(item.href);
 
                 return (
                   <Link
-                    key={item.href}
-                    href={item.href === "#settings" ? "/painel" : item.href}
+                    key={item.label}
+                    href={item.href}
                     onClick={() => setShowMore(false)}
                     className={`flex flex-col items-center gap-1.5 py-3 px-1 rounded-xl transition-colors ${
                       isActive

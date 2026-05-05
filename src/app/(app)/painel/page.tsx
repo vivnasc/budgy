@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { BalanceCard } from "@/components/balance-card";
 import { TransactionItem } from "@/components/transaction-item";
+import { TransactionDetailModal } from "@/components/transaction-detail-modal";
 import { BudgetProgress } from "@/components/budget-progress";
 import { useDashboard } from "@/hooks/use-supabase-data";
 import type { Account, Transaction, Budget, DebtRecord, XitiqueGroup } from "@/lib/supabase/types";
@@ -81,7 +82,8 @@ function getMonthLabel(referenceDate?: string | null): string {
 }
 
 export default function DashboardPage() {
-  const { data, loading } = useDashboard();
+  const { data, loading, refetch } = useDashboard();
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const latestDate = data?.transactions[0]?.date ?? null;
   const currentMonth = getMonthLabel(latestDate);
 
@@ -142,6 +144,13 @@ export default function DashboardPage() {
 
   const isEmpty = accounts.length === 0 && transactions.length === 0;
 
+  // Detecta dados estragados de imports antigos: transações sem conta ligada,
+  // ou contas todas com saldo zero apesar de existirem transações. Quando
+  // detectado, mostramos um banner pedindo para limpar e reimportar.
+  const orphanedTransactions = transactions.filter((t) => !t.account_id).length;
+  const allAccountsZero = accounts.length > 0 && accounts.every((a) => Number(a.balance) === 0);
+  const dataLooksBroken = transactions.length > 0 && (orphanedTransactions > 0 || allAccountsZero);
+
   return (
     <div className="min-h-screen pb-4">
       {/* Header — Premium gradient with texture */}
@@ -174,6 +183,29 @@ export default function DashboardPage() {
       </header>
 
       <main className="-mt-2 space-y-6">
+        {/* Banner para reimportar quando os dados ficaram inconsistentes */}
+        {dataLooksBroken && (
+          <section className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Lightbulb className="w-5 h-5 text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-amber-200">Os teus dados parecem desactualizados</h3>
+                <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
+                  As transações importadas não estão ligadas às contas certas. Limpa e reimporta o teu ficheiro do Mobills para obter os saldos correctos.
+                </p>
+                <a
+                  href="/importar"
+                  className="inline-flex items-center gap-2 mt-3 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+                >
+                  Ir para Importar <ChevronRight className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Empty State */}
         {isEmpty && (
           <section className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 text-center">
@@ -413,6 +445,7 @@ export default function DashboardPage() {
                         date={tx.date}
                         account={tx.accounts?.name ?? ""}
                         icon={icon}
+                        onClick={() => setSelectedTx(tx)}
                       />
                     );
                   })}
@@ -439,6 +472,15 @@ export default function DashboardPage() {
           </section>
         )}
       </main>
+
+      {/* Transaction Detail / Edit Modal */}
+      {selectedTx && (
+        <TransactionDetailModal
+          transaction={selectedTx}
+          onClose={() => setSelectedTx(null)}
+          onChanged={() => refetch()}
+        />
+      )}
     </div>
   );
 }

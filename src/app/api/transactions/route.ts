@@ -379,11 +379,18 @@ async function resolveCategoryIds(
   userId: string,
   txs: RawTxInput[]
 ): Promise<Map<string, string>> {
-  const names = new Set<string>();
+  // Collect category names + which transaction type uses them (so we can
+  // create new categories with the correct income/expense type)
+  const nameToType = new Map<string, "income" | "expense">();
   for (const tx of txs) {
-    if (tx.category_name) names.add(tx.category_name);
+    if (!tx.category_name) continue;
+    const name = tx.category_name.trim();
+    if (!name) continue;
+    if (nameToType.has(name)) continue;
+    // Transfers don't get categories; map them to expense bucket if encountered
+    nameToType.set(name, tx.type === "income" ? "income" : "expense");
   }
-  if (names.size === 0) return new Map();
+  if (nameToType.size === 0) return new Map();
 
   const { data } = await supabase
     .schema("money_schema")
@@ -395,6 +402,27 @@ async function resolveCategoryIds(
   for (const cat of (data || []) as { id: string; name: string }[]) {
     map.set(cat.name.toLowerCase(), cat.id);
   }
+
+  const missing = Array.from(nameToType.keys()).filter((n) => !map.has(n.toLowerCase()));
+  if (missing.length > 0) {
+    const newRows = missing.map((name) => ({
+      user_id: userId,
+      name,
+      type: nameToType.get(name) ?? "expense",
+      is_system: false,
+    }));
+
+    const { data: created } = await supabase
+      .schema("money_schema")
+      .from("categories")
+      .insert(newRows)
+      .select("id, name");
+
+    for (const cat of (created || []) as { id: string; name: string }[]) {
+      map.set(cat.name.toLowerCase(), cat.id);
+    }
+  }
+
   return map;
 }
 
