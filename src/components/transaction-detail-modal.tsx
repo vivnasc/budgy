@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Trash2, Save, Loader2, AlertCircle, Calendar, Tag, Wallet } from "lucide-react";
+import { X, Trash2, Save, Loader2, AlertCircle, Calendar, Tag, Wallet, Repeat, FileText } from "lucide-react";
 import type { Transaction } from "@/lib/supabase/types";
 
 interface TransactionDetailModalProps {
@@ -35,6 +35,13 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
   const [amount, setAmount] = useState(String(transaction.amount));
   const [date, setDate] = useState(transaction.date);
   const [categoryName, setCategoryName] = useState(transaction.categories?.name ?? "");
+  const [isRecurring, setIsRecurring] = useState(transaction.is_recurring ?? false);
+
+  // Notas guardadas (descrição original do banco) — ficam na coluna `notes`
+  // do supabase ou em tags. Aqui mostramos o que estiver disponível.
+  const notes = (transaction as Transaction & { notes?: string }).notes
+    || transaction.tags?.join(", ")
+    || "";
 
   const typeLabel = transaction.type === "income" ? "Receita" : transaction.type === "transfer" ? "Transferência" : "Despesa";
   const typeColor = transaction.type === "income"
@@ -64,6 +71,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
           date,
           category_name: categoryName || undefined,
           type: transaction.type,
+          is_recurring: isRecurring,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -198,6 +206,30 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
           <Field icon={Wallet} label="Conta">
             <p className="text-sm text-white">{transaction.accounts?.name || "—"}</p>
           </Field>
+
+          {/* Recurring toggle */}
+          <Field icon={Repeat} label="Recorrente">
+            {mode === "edit" ? (
+              <label className="flex items-center gap-2 text-sm text-white cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isRecurring}
+                  onChange={(e) => setIsRecurring(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-white/5 text-emerald-500 focus:ring-emerald-500/50"
+                />
+                Esta transação repete-se todos os meses
+              </label>
+            ) : (
+              <p className="text-sm text-white">{transaction.is_recurring ? "Sim — repete-se mensalmente" : "Não"}</p>
+            )}
+          </Field>
+
+          {/* Original notes (description from bank/SMS/import) */}
+          {notes && (
+            <Field icon={FileText} label="Notas">
+              <p className="text-xs text-gray-300 leading-relaxed break-words">{notes}</p>
+            </Field>
+          )}
 
           {err && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-start gap-2">

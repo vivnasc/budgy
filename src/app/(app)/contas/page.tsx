@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Plus,
   Smartphone,
@@ -9,8 +10,10 @@ import {
   TrendingUp,
   ArrowUpDown,
   Wallet,
+  Pencil,
 } from "lucide-react";
 import { AccountCard } from "@/components/account-card";
+import { OpeningBalanceModal } from "@/components/opening-balance-modal";
 import { useAccounts } from "@/hooks/use-supabase-data";
 import type { Account } from "@/lib/supabase/types";
 
@@ -23,7 +26,8 @@ const ACCOUNT_ICONS: Record<string, { icon: typeof Smartphone; color: string; la
 };
 
 export default function ContasPage() {
-  const { data: accounts, loading } = useAccounts();
+  const { data: accounts, loading, refetch } = useAccounts();
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
 
   const allAccounts = accounts ?? [];
   const totalBalance = allAccounts.reduce((sum, acc) => sum + acc.balance, 0);
@@ -108,17 +112,27 @@ export default function ContasPage() {
               {allAccounts.map((account) => {
                 const config = ACCOUNT_ICONS[account.type] ?? { icon: Wallet, color: "bg-gray-500", label: account.type };
                 return (
-                  <AccountCard
-                    key={account.id}
-                    name={account.name}
-                    type={config.label}
-                    icon={config.icon}
-                    balance={account.balance}
-                    currency={account.currency}
-                    color={account.color ?? config.color}
-                    lastTransaction=""
-                    lastTransactionDate=""
-                  />
+                  <div key={account.id} className="relative">
+                    <AccountCard
+                      name={account.name}
+                      type={config.label}
+                      icon={config.icon}
+                      balance={account.balance}
+                      currency={account.currency}
+                      color={account.color ?? config.color}
+                      lastTransaction=""
+                      lastTransactionDate=""
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditingAccount(account)}
+                      className="absolute top-3 right-3 inline-flex items-center gap-1 text-[10px] font-semibold bg-white/90 hover:bg-white text-gray-700 px-2 py-1 rounded-lg shadow border border-gray-200"
+                      title="Definir saldo de abertura"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Saldo abertura
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -158,6 +172,14 @@ export default function ContasPage() {
       <button className="fab">
         <Plus className="w-6 h-6" />
       </button>
+
+      {editingAccount && (
+        <OpeningBalanceModal
+          account={editingAccount}
+          onClose={() => setEditingAccount(null)}
+          onSaved={() => refetch()}
+        />
+      )}
     </div>
   );
 }

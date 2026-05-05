@@ -44,7 +44,7 @@ export async function PATCH(
     }
 
     const allowed: Record<string, unknown> = {};
-    for (const k of ["description", "amount", "date", "type", "category_id"]) {
+    for (const k of ["description", "amount", "date", "type", "category_id", "is_recurring", "tags"]) {
       if (k in body) allowed[k] = body[k];
     }
     if (categoryId) allowed.category_id = categoryId;
