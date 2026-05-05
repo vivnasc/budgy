@@ -142,6 +142,13 @@ export default function DashboardPage() {
 
   const isEmpty = accounts.length === 0 && transactions.length === 0;
 
+  // Detecta dados estragados de imports antigos: transações sem conta ligada,
+  // ou contas todas com saldo zero apesar de existirem transações. Quando
+  // detectado, mostramos um banner pedindo para limpar e reimportar.
+  const orphanedTransactions = transactions.filter((t) => !t.account_id).length;
+  const allAccountsZero = accounts.length > 0 && accounts.every((a) => Number(a.balance) === 0);
+  const dataLooksBroken = transactions.length > 0 && (orphanedTransactions > 0 || allAccountsZero);
+
   return (
     <div className="min-h-screen pb-4">
       {/* Header — Premium gradient with texture */}
@@ -174,6 +181,29 @@ export default function DashboardPage() {
       </header>
 
       <main className="-mt-2 space-y-6">
+        {/* Banner para reimportar quando os dados ficaram inconsistentes */}
+        {dataLooksBroken && (
+          <section className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Lightbulb className="w-5 h-5 text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-amber-200">Os teus dados parecem desactualizados</h3>
+                <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
+                  As transações importadas não estão ligadas às contas certas. Limpa e reimporta o teu ficheiro do Mobills para obter os saldos correctos.
+                </p>
+                <a
+                  href="/importar"
+                  className="inline-flex items-center gap-2 mt-3 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+                >
+                  Ir para Importar <ChevronRight className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Empty State */}
         {isEmpty && (
           <section className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 text-center">
