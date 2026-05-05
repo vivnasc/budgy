@@ -16,6 +16,7 @@ import {
   Banknote,
 } from "lucide-react";
 import { useDebts } from "@/hooks/use-supabase-data";
+import { QuickCreateModal } from "@/components/quick-create-modal";
 import type { DebtRecord } from "@/lib/supabase/types";
 
 type DebtTab = "devo" | "devem";
@@ -95,7 +96,8 @@ export default function DividasPage() {
   const [sortBy, setSortBy] = useState<SortBy>("date");
   const [sortAsc, setSortAsc] = useState(false);
 
-  const { data: debts, loading } = useDebts();
+  const { data: debts, loading, refetch } = useDebts();
+  const [creating, setCreating] = useState(false);
   const allDebts = debts ?? [];
 
   const oweDebts = useMemo(() => allDebts.filter((d) => d.type === "owe"), [allDebts]);
@@ -240,9 +242,13 @@ export default function DividasPage() {
         )}
       </main>
 
-      <button className="fab">
+      <button onClick={() => setCreating(true)} className="fab">
         <Plus className="w-6 h-6" />
       </button>
+
+      {creating && (
+        <QuickCreateModal kind="debt" onClose={() => setCreating(false)} onCreated={() => refetch()} />
+      )}
     </div>
   );
 }

@@ -847,6 +847,7 @@ function ImportPreview({
         transfer_to_account: tx.transferToAccount,
         category_name: tx.mappedCategory,
         tags: tx.tags,
+        status: tx.status,
       }));
 
       const response = await fetch("/api/transactions", {

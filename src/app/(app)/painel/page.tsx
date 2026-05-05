@@ -94,13 +94,19 @@ export default function DashboardPage() {
   const xitique = data?.xitique ?? [];
 
   const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
-  const totalIncome = useMemo(
-    () => transactions.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0),
+  // Receitas/despesas só somam o que está realmente "completed" — pendentes
+  // e canceladas não devem inflar nem reduzir o que se gastou/recebeu
+  const completedTx = useMemo(
+    () => transactions.filter((t) => !t.status || t.status === "completed"),
     [transactions]
   );
+  const totalIncome = useMemo(
+    () => completedTx.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0),
+    [completedTx]
+  );
   const totalExpenses = useMemo(
-    () => transactions.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0),
-    [transactions]
+    () => completedTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0),
+    [completedTx]
   );
   const incomePercent = totalIncome + totalExpenses > 0
     ? (totalIncome / (totalIncome + totalExpenses)) * 100
@@ -442,6 +448,7 @@ export default function DashboardPage() {
                         category={tx.categories?.name ?? "Outros"}
                         amount={tx.type === "expense" ? -tx.amount : tx.amount}
                         type={tx.type}
+                        status={tx.status}
                         date={tx.date}
                         account={tx.accounts?.name ?? ""}
                         icon={icon}

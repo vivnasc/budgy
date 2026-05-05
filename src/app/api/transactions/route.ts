@@ -440,7 +440,7 @@ async function recalcAccountBalances(
   const { data: txs } = await supabase
     .schema("money_schema")
     .from("transactions")
-    .select("account_id, transfer_to_account_id, type, amount")
+    .select("account_id, transfer_to_account_id, type, amount, status")
     .eq("user_id", userId);
 
   if (!txs) return;
@@ -448,7 +448,9 @@ async function recalcAccountBalances(
   const balances = new Map<string, number>();
   for (const id of accountIds) balances.set(id, 0);
 
-  for (const tx of txs as { account_id: string | null; transfer_to_account_id: string | null; type: string; amount: number }[]) {
+  for (const tx of txs as { account_id: string | null; transfer_to_account_id: string | null; type: string; amount: number; status?: string | null }[]) {
+    // Pending and cancelled transactions don't move real money — skip them
+    if (tx.status && tx.status !== "completed") continue;
     const amt = Number(tx.amount) || 0;
     if (tx.account_id && balances.has(tx.account_id)) {
       const cur = balances.get(tx.account_id)!;

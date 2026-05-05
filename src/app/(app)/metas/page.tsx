@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Plus,
   PiggyBank,
@@ -8,12 +9,14 @@ import {
   Wallet,
 } from "lucide-react";
 import { GoalCard } from "@/components/goal-card";
+import { QuickCreateModal } from "@/components/quick-create-modal";
 import { useGoals } from "@/hooks/use-supabase-data";
 
 const GOAL_COLORS = ["bg-emerald-500", "bg-blue-500", "bg-amber-500", "bg-purple-500", "bg-rose-500", "bg-teal-500", "bg-indigo-500"];
 
 export default function MetasPage() {
-  const { data: goals, loading } = useGoals();
+  const { data: goals, loading, refetch } = useGoals();
+  const [creating, setCreating] = useState(false);
 
   const allGoals = goals ?? [];
   const activeGoals = allGoals.filter((g) => !g.is_completed);
@@ -158,9 +161,13 @@ export default function MetasPage() {
         )}
       </main>
 
-      <button className="fab">
+      <button onClick={() => setCreating(true)} className="fab">
         <Plus className="w-6 h-6" />
       </button>
+
+      {creating && (
+        <QuickCreateModal kind="goal" onClose={() => setCreating(false)} onCreated={() => refetch()} />
+      )}
     </div>
   );
 }
