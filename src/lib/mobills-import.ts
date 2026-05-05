@@ -918,6 +918,19 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
 
       const type = row.type ? parseTransactionType(row.type) : (rawAmount < 0 ? "expense" : "income");
       const amount = Math.abs(rawAmount);
+
+      // Determine status:
+      //   1. Honour the Mobills "Status" column if it is present and unambiguous
+      //   2. Otherwise: if the date is in the future, mark as pending (the
+      //      money has not actually moved yet — typical for scheduled bills
+      //      and salaries that the user added in advance)
+      //   3. Default to completed
+      const todayISO = new Date().toISOString().split("T")[0]!;
+      const parsedStatus = parseTransactionStatus(row.status || "");
+      const status: "pending" | "completed" | "cancelled" =
+        row.status && row.status.trim()
+          ? parsedStatus
+          : (date > todayISO ? "pending" : "completed");
       // Debug: track raw category values from file
       const rawCat = row.category ?? "";
       const rawSubcat = row.subcategory ?? "";
@@ -965,7 +978,7 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
         account: row.account || "Principal",
         amount,
         type,
-        status: parseTransactionStatus(row.status || ""),
+        status,
         tags: row.tags ? row.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
         notes: row.notes || "",
         needsReview,

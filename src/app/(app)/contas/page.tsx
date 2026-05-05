@@ -129,10 +129,10 @@ export default function ContasPage() {
                       type="button"
                       onClick={() => setEditingAccount(account)}
                       className="absolute top-3 right-3 inline-flex items-center gap-1 text-[10px] font-semibold bg-white/90 hover:bg-white text-gray-700 px-2 py-1 rounded-lg shadow border border-gray-200"
-                      title="Definir saldo de abertura"
+                      title="Acertar com o saldo real do banco"
                     >
                       <Pencil className="w-3 h-3" />
-                      Saldo abertura
+                      Acertar saldo
                     </button>
                   </div>
                 );
