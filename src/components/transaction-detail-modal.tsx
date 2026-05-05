@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { X, Trash2, Save, Loader2, AlertCircle, Calendar, Tag, Wallet, Repeat, FileText } from "lucide-react";
-import type { Transaction } from "@/lib/supabase/types";
+import { X, Trash2, Save, Loader2, AlertCircle, Calendar, Tag, Wallet, Repeat, FileText, Clock, CheckCircle2, XCircle } from "lucide-react";
+import type { Transaction, TransactionStatus } from "@/lib/supabase/types";
 
 interface TransactionDetailModalProps {
   transaction: Transaction;
@@ -36,6 +36,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
   const [date, setDate] = useState(transaction.date);
   const [categoryName, setCategoryName] = useState(transaction.categories?.name ?? "");
   const [isRecurring, setIsRecurring] = useState(transaction.is_recurring ?? false);
+  const [status, setStatus] = useState<TransactionStatus>(transaction.status ?? "completed");
 
   // Notas guardadas (descrição original do banco) — ficam na coluna `notes`
   // do supabase ou em tags. Aqui mostramos o que estiver disponível.
@@ -72,6 +73,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
           category_name: categoryName || undefined,
           type: transaction.type,
           is_recurring: isRecurring,
+          status,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -205,6 +207,46 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
           {/* Account */}
           <Field icon={Wallet} label="Conta">
             <p className="text-sm text-white">{transaction.accounts?.name || "—"}</p>
+          </Field>
+
+          {/* Status (pendente/paga/cancelada) */}
+          <Field icon={Clock} label="Estado">
+            {mode === "edit" ? (
+              <div className="flex gap-2">
+                {([
+                  { value: "completed", label: "Paga", icon: CheckCircle2, color: "emerald" },
+                  { value: "pending", label: "Pendente", icon: Clock, color: "amber" },
+                  { value: "cancelled", label: "Cancelada", icon: XCircle, color: "gray" },
+                ] as const).map((opt) => {
+                  const active = status === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setStatus(opt.value)}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-colors border ${
+                        active
+                          ? opt.color === "emerald"
+                            ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                            : opt.color === "amber"
+                              ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                              : "bg-gray-500/20 border-gray-500/40 text-gray-300"
+                          : "bg-white/5 border-white/10 text-gray-400 hover:bg-white/10"
+                      }`}
+                    >
+                      <opt.icon className="w-3.5 h-3.5" />
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-white flex items-center gap-2">
+                {status === "completed" && (<><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Paga (já realizada)</>)}
+                {status === "pending" && (<><Clock className="w-4 h-4 text-amber-400" /> Pendente — não conta no saldo</>)}
+                {status === "cancelled" && (<><XCircle className="w-4 h-4 text-gray-400" /> Cancelada — não conta</>)}
+              </p>
+            )}
           </Field>
 
           {/* Recurring toggle */}

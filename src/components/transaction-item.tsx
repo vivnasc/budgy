@@ -5,6 +5,7 @@ interface TransactionItemProps {
   category: string;
   amount: number;
   type: "income" | "expense" | "transfer";
+  status?: "pending" | "completed" | "cancelled" | null;
   date: string;
   account: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -16,6 +17,7 @@ export function TransactionItem({
   category,
   amount,
   type,
+  status,
   date,
   account,
   icon: Icon,
@@ -52,11 +54,14 @@ export function TransactionItem({
         ? "text-indigo-500"
         : "text-red-500";
 
+  const isPending = status === "pending";
+  const isCancelled = status === "cancelled";
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-left flex items-center gap-3 p-3 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
+      className={`w-full text-left flex items-center gap-3 p-3 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer ${isCancelled ? "opacity-50 line-through" : ""}`}
     >
       {/* Category Icon */}
       <div
@@ -67,7 +72,19 @@ export function TransactionItem({
 
       {/* Description & Category */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{description}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium truncate">{description}</p>
+          {isPending && (
+            <span className="flex-shrink-0 text-2xs font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+              Pendente
+            </span>
+          )}
+          {isCancelled && (
+            <span className="flex-shrink-0 text-2xs font-bold uppercase tracking-wider bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">
+              Cancelada
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-xs text-[var(--color-text-muted)]">
             {category}

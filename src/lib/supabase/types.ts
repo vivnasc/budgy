@@ -8,6 +8,7 @@
 export type AccountType = "bank" | "mpesa" | "cash" | "savings" | "investment";
 export type CategoryType = "income" | "expense";
 export type TransactionType = "income" | "expense" | "transfer";
+export type TransactionStatus = "pending" | "completed" | "cancelled";
 export type BudgetPeriod = "weekly" | "monthly" | "quarterly" | "annual";
 export type DebtType = "owe" | "owed";
 
@@ -45,6 +46,7 @@ export interface Transaction {
   account_id: string;
   category_id: string | null;
   type: TransactionType;
+  status: TransactionStatus;
   amount: number;
   currency: string;
   description: string | null;

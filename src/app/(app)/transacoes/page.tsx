@@ -285,6 +285,7 @@ export default function TransacoesPage() {
                       category={tx.categories?.name ?? "Outros"}
                       amount={tx.type === "expense" ? -tx.amount : tx.amount}
                       type={tx.type}
+                      status={tx.status}
                       date={tx.date}
                       account={tx.accounts?.name ?? ""}
                       icon={icon}

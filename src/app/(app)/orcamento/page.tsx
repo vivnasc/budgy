@@ -22,7 +22,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { BudgetProgress } from "@/components/budget-progress";
-import { useBudgets, useTransactions } from "@/hooks/use-supabase-data";
+import { useBudgets, useTransactions, useCategories } from "@/hooks/use-supabase-data";
+import { QuickCreateModal } from "@/components/quick-create-modal";
 
 const CATEGORY_ICONS: Record<string, typeof Utensils> = {
   "Alimentação": Utensils,
@@ -52,7 +53,10 @@ export default function OrcamentoPage() {
   const [monthOffset, setMonthOffset] = useState(0);
   const { from, to, label: currentMonth } = useMemo(() => getMonthDates(monthOffset), [monthOffset]);
 
-  const { data: budgets, loading: budgetsLoading } = useBudgets();
+  const { data: budgets, loading: budgetsLoading, refetch } = useBudgets();
+  const { data: allCategories } = useCategories();
+  const [creating, setCreating] = useState(false);
+  const expenseCategories = (allCategories ?? []).filter((c) => c.type === "expense");
   const { data: transactions, loading: txLoading } = useTransactions({ type: "expense", from, to, limit: 500 });
 
   const allBudgets = budgets ?? [];
@@ -262,9 +266,18 @@ export default function OrcamentoPage() {
         )}
       </main>
 
-      <button className="fab">
+      <button onClick={() => setCreating(true)} className="fab">
         <Plus className="w-6 h-6" />
       </button>
+
+      {creating && (
+        <QuickCreateModal
+          kind="budget"
+          categoryOptions={expenseCategories}
+          onClose={() => setCreating(false)}
+          onCreated={() => refetch()}
+        />
+      )}
     </div>
   );
 }

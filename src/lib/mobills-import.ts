@@ -36,6 +36,7 @@ export interface ImportedTransaction {
   transferToAccount?: string;
   amount: number;
   type: "income" | "expense" | "transfer";
+  status: "pending" | "completed" | "cancelled";
   tags: string[];
   notes: string;
   needsReview: boolean;
@@ -757,6 +758,15 @@ function parseTransactionType(type: string): "income" | "expense" | "transfer" {
   return "expense";
 }
 
+function parseTransactionStatus(status: string): "pending" | "completed" | "cancelled" {
+  const s = status.toLowerCase().trim();
+  if (!s) return "completed";
+  if (/paid|paga|pago|completed|conclu|realiz/i.test(s)) return "completed";
+  if (/pending|pendent|future|previst|expected|aguarda/i.test(s)) return "pending";
+  if (/cancel|anulad/i.test(s)) return "cancelled";
+  return "completed";
+}
+
 function parseMobillsAmount(value: string): number {
   // Remove currency symbols and whitespace
   let cleaned = value.replace(/[MZNTUSDEURGBPZAR$€£R\s]/gi, "").trim();
@@ -955,6 +965,7 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
         account: row.account || "Principal",
         amount,
         type,
+        status: parseTransactionStatus(row.status || ""),
         tags: row.tags ? row.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
         notes: row.notes || "",
         needsReview,
@@ -1099,6 +1110,7 @@ export function parseMobillsTransfersCSV(csvContent: string): ImportResult {
         transferToAccount: dest,
         amount,
         type: "transfer",
+        status: "completed",
         tags: tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [],
         notes: "",
         needsReview: false,

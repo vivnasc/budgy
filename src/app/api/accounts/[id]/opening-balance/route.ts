@@ -89,11 +89,12 @@ export async function POST(
     const { data: txs } = await supabase
       .schema("money_schema")
       .from("transactions")
-      .select("account_id, transfer_to_account_id, type, amount")
+      .select("account_id, transfer_to_account_id, type, amount, status")
       .eq("user_id", user.id);
 
     let balance = 0;
-    for (const tx of (txs || []) as { account_id: string | null; transfer_to_account_id: string | null; type: string; amount: number }[]) {
+    for (const tx of (txs || []) as { account_id: string | null; transfer_to_account_id: string | null; type: string; amount: number; status?: string | null }[]) {
+      if (tx.status && tx.status !== "completed") continue;
       const amt = Number(tx.amount) || 0;
       if (tx.account_id === id) {
         if (tx.type === "income") balance += amt;
