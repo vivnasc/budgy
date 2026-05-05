@@ -206,12 +206,14 @@ const SYSTEM_RULES: CategorizationRule[] = [
   { pattern: "baby", isRegex: false, category: "Família", confidence: 0.7, confirmCount: 0, source: "system" },
 
   // ── Home / Garden / Domestic services ──
-  { pattern: "jardineira", isRegex: false, category: "Casa", confidence: 0.9, confirmCount: 0, source: "system" },
-  { pattern: "jardim", isRegex: false, category: "Casa", confidence: 0.85, confirmCount: 0, source: "system" },
+  { pattern: "jardineira", isRegex: false, category: "Jardim & Piscina", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "jardim", isRegex: false, category: "Jardim & Piscina", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "garden", isRegex: false, category: "Jardim & Piscina", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "manutenção piscina", isRegex: false, category: "Jardim & Piscina", confidence: 0.98, confirmCount: 0, source: "system" },
+  { pattern: "smartpools", isRegex: false, category: "Jardim & Piscina", confidence: 0.98, confirmCount: 0, source: "system" },
+  { pattern: "rainbow nurseries", isRegex: false, category: "Jardim & Piscina", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "plantas", isRegex: false, category: "Jardim & Piscina", confidence: 0.9, confirmCount: 0, source: "system" },
   { pattern: "limpeza", isRegex: false, category: "Casa", confidence: 0.85, confirmCount: 0, source: "system" },
-  { pattern: "empregada", isRegex: false, category: "Casa", confidence: 0.9, confirmCount: 0, source: "system" },
-  { pattern: "rainbow nurseries", isRegex: false, category: "Casa", confidence: 0.95, confirmCount: 0, source: "system" },
-  { pattern: "smartpools", isRegex: false, category: "Casa", confidence: 0.95, confirmCount: 0, source: "system" },
   { pattern: "home land", isRegex: false, category: "Casa", confidence: 0.9, confirmCount: 0, source: "system" },
 
   // ── Personal income (side hustles / family income) ──
@@ -223,14 +225,18 @@ const SYSTEM_RULES: CategorizationRule[] = [
   // ── Salários (com prioridade alta para distinguir empregados domésticos vs salário recebido) ──
   { pattern: "salário bm", isRegex: false, category: "Salário", confidence: 0.98, confirmCount: 0, source: "system" },
   { pattern: "salario bm", isRegex: false, category: "Salário", confidence: 0.98, confirmCount: 0, source: "system" },
-  // Salários a empregados domésticos / pessoas (despesa, não receita) — confidence > regra genérica "salário"
-  { pattern: "salário antónio", isRegex: false, category: "Casa", confidence: 0.97, confirmCount: 0, source: "system" },
-  { pattern: "salario antonio", isRegex: false, category: "Casa", confidence: 0.97, confirmCount: 0, source: "system" },
-  { pattern: "salário persina", isRegex: false, category: "Casa", confidence: 0.97, confirmCount: 0, source: "system" },
-  { pattern: "salário marta", isRegex: false, category: "Casa", confidence: 0.97, confirmCount: 0, source: "system" },
-  { pattern: "salário semo", isRegex: false, category: "Casa", confidence: 0.97, confirmCount: 0, source: "system" },
-  { pattern: "salario cacilda", isRegex: false, category: "Casa", confidence: 0.97, confirmCount: 0, source: "system" },
-  { pattern: "salario alzira", isRegex: false, category: "Casa", confidence: 0.97, confirmCount: 0, source: "system" },
+  // Salários a empregados domésticos / pessoas — categoria própria, não "Casa"
+  { pattern: "salário antónio", isRegex: false, category: "Empregados Domésticos", confidence: 0.97, confirmCount: 0, source: "system" },
+  { pattern: "salario antonio", isRegex: false, category: "Empregados Domésticos", confidence: 0.97, confirmCount: 0, source: "system" },
+  { pattern: "salário persina", isRegex: false, category: "Empregados Domésticos", confidence: 0.97, confirmCount: 0, source: "system" },
+  { pattern: "salário marta", isRegex: false, category: "Empregados Domésticos", confidence: 0.97, confirmCount: 0, source: "system" },
+  { pattern: "salário semo", isRegex: false, category: "Empregados Domésticos", confidence: 0.97, confirmCount: 0, source: "system" },
+  { pattern: "salario cacilda", isRegex: false, category: "Empregados Domésticos", confidence: 0.97, confirmCount: 0, source: "system" },
+  { pattern: "salario alzira", isRegex: false, category: "Empregados Domésticos", confidence: 0.97, confirmCount: 0, source: "system" },
+  { pattern: "salário cris", isRegex: false, category: "Empregados Domésticos", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "guarda triunfo", isRegex: false, category: "Empregados Domésticos", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "empregada", isRegex: false, category: "Empregados Domésticos", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "doméstica", isRegex: false, category: "Empregados Domésticos", confidence: 0.95, confirmCount: 0, source: "system" },
 
   // ── Comerciantes específicos (Alimentação) ──
   { pattern: "mercearia", isRegex: false, category: "Alimentação", confidence: 0.95, confirmCount: 0, source: "system" },

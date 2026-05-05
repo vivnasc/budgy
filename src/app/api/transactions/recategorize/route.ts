@@ -5,12 +5,18 @@ import { autoCategorize } from "@/lib/auto-categorize";
 /**
  * POST /api/transactions/recategorize
  *
- * Re-runs the auto-categorize engine on every transaction belonging to the
- * authenticated user. Categories are created on demand (per user) when they
- * don't yet exist. Useful after import bugs that left transactions with no
- * category, or after improvements to the categorization rules.
+ * Backfills the category_id of transactions that are uncategorised. The
+ * resolution order for each transaction is:
  *
- * Returns: { success: true, updated: <count>, total: <count> }
+ *   1. autoCategorize() rules with confidence >= 0.5 → use that category
+ *   2. autoCategorize() rules with confidence >= 0.3 AND the transaction
+ *      currently has no category → use that category (better than null)
+ *   3. Look at OTHER transactions of the same user with the same description:
+ *      if any of them have a category set, use the most common one (this is
+ *      how we "learn" from manual edits and from the import-time mapping)
+ *
+ * Categories are created on demand under the user's account when they don't
+ * yet exist in the categories table. Returns { success, updated, total }.
  */
 export async function POST() {
   try {
@@ -21,7 +27,7 @@ export async function POST() {
     const { data: txs, error: txErr } = await supabase
       .schema("money_schema")
       .from("transactions")
-      .select("id, description, type, amount, category_id, categories(name)")
+      .select("id, description, type, amount, category_id, categories(id, name)")
       .eq("user_id", user.id);
     if (txErr) return NextResponse.json({ error: txErr.message }, { status: 500 });
 
@@ -31,18 +37,48 @@ export async function POST() {
       type: "income" | "expense" | "transfer";
       amount: number;
       category_id: string | null;
-      categories?: { name: string } | { name: string }[] | null;
+      categories?: { id: string; name: string } | { id: string; name: string }[] | null;
     }[];
 
-    const currentCategoryName = (
-      cats: { name: string } | { name: string }[] | null | undefined
-    ): string | undefined => {
+    const currentCategory = (
+      cats: { id: string; name: string } | { id: string; name: string }[] | null | undefined
+    ): { id: string; name: string } | undefined => {
       if (!cats) return undefined;
-      if (Array.isArray(cats)) return cats[0]?.name;
-      return cats.name;
+      if (Array.isArray(cats)) return cats[0];
+      return cats;
     };
 
-    // Load categories accessible to this user (system + own)
+    // Build a description → most common categoryId map from already-categorised
+    // transactions (this is how we propagate manual edits to similar rows)
+    const descToCategory = new Map<string, Map<string, number>>();
+    for (const tx of transactions) {
+      const cat = currentCategory(tx.categories);
+      if (!cat || !tx.description) continue;
+      const key = tx.description.toLowerCase().trim();
+      if (!key) continue;
+      let counts = descToCategory.get(key);
+      if (!counts) {
+        counts = new Map();
+        descToCategory.set(key, counts);
+      }
+      counts.set(cat.id, (counts.get(cat.id) ?? 0) + 1);
+    }
+    const learnedCategoryFor = (description: string): string | undefined => {
+      const key = description.toLowerCase().trim();
+      const counts = descToCategory.get(key);
+      if (!counts) return undefined;
+      let bestId: string | undefined;
+      let bestCount = 0;
+      for (const [id, c] of counts) {
+        if (c > bestCount) {
+          bestCount = c;
+          bestId = id;
+        }
+      }
+      return bestId;
+    };
+
+    // Categories accessible to this user (system + own)
     const { data: existingCats } = await supabase
       .schema("money_schema")
       .from("categories")
@@ -70,29 +106,56 @@ export async function POST() {
 
     let updated = 0;
     for (const tx of transactions) {
-      // Skip transfers — they don't need categories
+      // Transfers don't get categories
       if (tx.type === "transfer") continue;
 
-      // Skip if description is empty (nothing to match against)
       const desc = (tx.description || "").trim();
       if (!desc) continue;
 
-      const result = autoCategorize(desc, tx.type, Number(tx.amount));
-      // Only update if we got a confident match AND it differs from current
-      if (!result.category || result.category === currentCategoryName(tx.categories)) continue;
-      if (result.confidence < 0.5) continue;
+      const current = currentCategory(tx.categories);
+      const isUncategorised = !tx.category_id || (current && current.name === "Outros");
 
-      const catType = tx.type === "income" ? "income" : "expense";
-      const categoryId = await ensureCategory(result.category, catType);
-      if (!categoryId) continue;
+      const result = autoCategorize(desc, tx.type, Number(tx.amount));
+      const catType: "income" | "expense" = tx.type === "income" ? "income" : "expense";
+
+      let nextCategoryId: string | undefined;
+
+      if (result.category && result.category !== "Outros" && result.category !== "Outro Rendimento") {
+        if (result.confidence >= 0.5) {
+          // Strong match — overrides whatever is set
+          nextCategoryId = await ensureCategory(result.category, catType);
+        } else if (result.confidence >= 0.3 && isUncategorised) {
+          // Weak match — only fill in if the row had nothing yet
+          nextCategoryId = await ensureCategory(result.category, catType);
+        }
+      }
+
+      // Fall back to learning from siblings with the same description
+      if (!nextCategoryId && isUncategorised) {
+        const learned = learnedCategoryFor(desc);
+        if (learned && learned !== current?.id) nextCategoryId = learned;
+      }
+
+      if (!nextCategoryId || nextCategoryId === current?.id) continue;
 
       const { error: updErr } = await supabase
         .schema("money_schema")
         .from("transactions")
-        .update({ category_id: categoryId })
+        .update({ category_id: nextCategoryId })
         .eq("id", tx.id)
         .eq("user_id", user.id);
-      if (!updErr) updated++;
+      if (!updErr) {
+        updated++;
+        // Update our in-memory description map so subsequent uncategorised
+        // rows benefit immediately
+        const key = desc.toLowerCase().trim();
+        let counts = descToCategory.get(key);
+        if (!counts) {
+          counts = new Map();
+          descToCategory.set(key, counts);
+        }
+        counts.set(nextCategoryId, (counts.get(nextCategoryId) ?? 0) + 1);
+      }
     }
 
     return NextResponse.json({ success: true, updated, total: transactions.length });
@@ -100,3 +163,4 @@ export async function POST() {
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
+

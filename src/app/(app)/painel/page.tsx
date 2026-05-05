@@ -94,6 +94,7 @@ export default function DashboardPage() {
   const xitique = data?.xitique ?? [];
 
   const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+  const totalPredicted = accounts.reduce((sum, acc) => sum + (acc.balance_predicted ?? acc.balance), 0);
   // Receitas/despesas só somam o que está realmente "completed" — pendentes
   // e canceladas não devem inflar nem reduzir o que se gastou/recebeu
   const completedTx = useMemo(
@@ -318,7 +319,17 @@ export default function DashboardPage() {
               </div>
               <p className="text-xs text-gray-500">Saldo Total</p>
             </div>
-            <p className="text-xl font-bold text-white">{totalBalance.toLocaleString("pt-MZ")} <span className="text-xs font-normal text-gray-500">MZN</span></p>
+            <p className={`text-xl font-bold ${totalBalance < 0 ? "text-red-400" : "text-white"}`}>
+              {totalBalance.toLocaleString("pt-MZ")} <span className="text-xs font-normal text-gray-500">MZN</span>
+            </p>
+            {totalPredicted !== totalBalance && (
+              <p className="text-xs text-gray-400 mt-1">
+                Previsto:{" "}
+                <span className={`font-semibold ${totalPredicted < 0 ? "text-red-400" : "text-emerald-400"}`}>
+                  {totalPredicted.toLocaleString("pt-MZ")} MZN
+                </span>
+              </p>
+            )}
             <div className="mt-2 h-1.5 bg-white/5 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-emerald-400 to-emerald-500 rounded-full transition-all duration-500"

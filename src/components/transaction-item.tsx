@@ -31,12 +31,32 @@ export function TransactionItem({
     }
   );
 
+  const isPending = status === "pending";
+  const isCancelled = status === "cancelled";
+  const isCompleted = !status || status === "completed";
+
+  // Cor do indicador de estado (à esquerda do ícone, sempre visível)
+  // verde = paga/recebida, amarelo = pendente, cinza = cancelada
+  const statusDotColor = isCompleted
+    ? "bg-emerald-500"
+    : isPending
+      ? "bg-amber-500"
+      : "bg-gray-400";
+  const statusTitle = isCompleted
+    ? "Paga / recebida"
+    : isPending
+      ? "Pendente — não conta no saldo"
+      : "Cancelada";
+
+  // Para pendentes esbatemos o valor e o ícone (mas mantemos legível)
+  const dimmed = isPending || isCancelled;
+
   const amountColor =
     type === "income"
-      ? "text-emerald-600"
+      ? isCompleted ? "text-emerald-600" : "text-emerald-400/70"
       : type === "transfer"
-        ? "text-indigo-500"
-        : "text-red-500";
+        ? isCompleted ? "text-indigo-500" : "text-indigo-400/70"
+        : isCompleted ? "text-red-500" : "text-red-400/70";
 
   const amountPrefix = type === "income" ? "+" : type === "transfer" ? "" : "";
 
@@ -54,18 +74,22 @@ export function TransactionItem({
         ? "text-indigo-500"
         : "text-red-500";
 
-  const isPending = status === "pending";
-  const isCancelled = status === "cancelled";
-
   return (
     <button
       type="button"
       onClick={onClick}
       className={`w-full text-left flex items-center gap-3 p-3 hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer ${isCancelled ? "opacity-50 line-through" : ""}`}
     >
+      {/* Status dot — sempre visível à esquerda do ícone */}
+      <div
+        className={`w-2 h-2 rounded-full ${statusDotColor} flex-shrink-0 ${isPending ? "animate-pulse" : ""}`}
+        title={statusTitle}
+        aria-label={statusTitle}
+      />
+
       {/* Category Icon */}
       <div
-        className={`w-10 h-10 ${iconBg} rounded-xl flex items-center justify-center flex-shrink-0`}
+        className={`w-10 h-10 ${iconBg} rounded-xl flex items-center justify-center flex-shrink-0 ${dimmed ? "opacity-70" : ""}`}
       >
         <Icon className={`w-5 h-5 ${iconColor}`} />
       </div>
@@ -73,7 +97,7 @@ export function TransactionItem({
       {/* Description & Category */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium truncate">{description}</p>
+          <p className={`text-sm font-medium truncate ${dimmed ? "text-gray-500" : ""}`}>{description}</p>
           {isPending && (
             <span className="flex-shrink-0 text-2xs font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
               Pendente

@@ -33,6 +33,7 @@ export default function ContasPage() {
 
   const allAccounts = accounts ?? [];
   const totalBalance = allAccounts.reduce((sum, acc) => sum + acc.balance, 0);
+  const totalPredicted = allAccounts.reduce((sum, acc) => sum + (acc.balance_predicted ?? acc.balance), 0);
   const savingsAccounts = allAccounts.filter((a) => a.type === "savings" || a.type === "investment");
   const savingsBalance = savingsAccounts.reduce((sum, acc) => sum + acc.balance, 0);
   const liquidBalance = totalBalance - savingsBalance;
@@ -59,12 +60,20 @@ export default function ContasPage() {
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
               <Wallet className="w-5 h-5" />
             </div>
-            <div>
-              <p className="text-primary-100 text-xs">Património Total</p>
+            <div className="flex-1">
+              <p className="text-primary-100 text-xs">Saldo actual</p>
               <p className="text-2xl font-bold">
                 {totalBalance.toLocaleString("pt-MZ")}{" "}
                 <span className="text-sm font-normal text-primary-200">MZN</span>
               </p>
+              {totalPredicted !== totalBalance && (
+                <p className="text-xs text-primary-100 mt-0.5">
+                  Previsto:{" "}
+                  <span className="font-semibold">
+                    {totalPredicted.toLocaleString("pt-MZ")} MZN
+                  </span>
+                </p>
+              )}
             </div>
           </div>
 
@@ -120,6 +129,7 @@ export default function ContasPage() {
                       type={config.label}
                       icon={config.icon}
                       balance={account.balance}
+                      balancePredicted={account.balance_predicted}
                       currency={account.currency}
                       color={account.color ?? config.color}
                       lastTransaction=""
@@ -129,10 +139,10 @@ export default function ContasPage() {
                       type="button"
                       onClick={() => setEditingAccount(account)}
                       className="absolute top-3 right-3 inline-flex items-center gap-1 text-[10px] font-semibold bg-white/90 hover:bg-white text-gray-700 px-2 py-1 rounded-lg shadow border border-gray-200"
-                      title="Definir saldo de abertura"
+                      title="Acertar com o saldo real do banco"
                     >
                       <Pencil className="w-3 h-3" />
-                      Saldo abertura
+                      Acertar saldo
                     </button>
                   </div>
                 );

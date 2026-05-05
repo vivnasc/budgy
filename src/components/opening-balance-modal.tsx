@@ -11,15 +11,17 @@ interface Props {
 }
 
 export function OpeningBalanceModal({ account, onClose, onSaved }: Props) {
-  const [amount, setAmount] = useState("0");
+  const [realBalance, setRealBalance] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const currentBalance = Number(account.balance) || 0;
 
   const handleSave = async () => {
     setSaving(true);
     setErr(null);
     try {
-      const num = parseFloat(amount.replace(/\s/g, "").replace(",", "."));
+      const num = parseFloat(realBalance.replace(/\s/g, "").replace(/,/g, "."));
       if (!Number.isFinite(num)) {
         setErr("Valor inválido");
         setSaving(false);
@@ -28,7 +30,7 @@ export function OpeningBalanceModal({ account, onClose, onSaved }: Props) {
       const res = await fetch(`/api/accounts/${account.id}/opening-balance`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: num }),
+        body: JSON.stringify({ current_real_balance: num }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
@@ -50,7 +52,7 @@ export function OpeningBalanceModal({ account, onClose, onSaved }: Props) {
         <div className="border-b border-gray-100 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Wallet className="w-4 h-4 text-emerald-600" />
-            <h2 className="text-sm font-bold text-gray-900">Saldo de abertura</h2>
+            <h2 className="text-sm font-bold text-gray-900">Acertar saldo da conta</h2>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">
             <X className="w-4 h-4" />
@@ -59,31 +61,45 @@ export function OpeningBalanceModal({ account, onClose, onSaved }: Props) {
 
         <div className="p-4 space-y-4">
           <div>
-            <p className="text-xs text-gray-500">Conta</p>
-            <p className="text-sm font-semibold text-gray-900">{account.name}</p>
-            <p className="text-xs text-gray-400 mt-1">Saldo actual calculado: {account.balance.toLocaleString("pt-MZ")} MZN</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Conta</p>
+            <p className="text-base font-semibold text-gray-900">{account.name}</p>
+          </div>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500">Saldo calculado pelo BUDGY</span>
+              <span className={`text-sm font-bold ${currentBalance < 0 ? "text-red-600" : "text-gray-900"}`}>
+                {currentBalance.toLocaleString("pt-MZ")} MZN
+              </span>
+            </div>
+            <p className="text-xs text-gray-400">
+              Soma de todas as transações importadas (sem o saldo que a conta já tinha antes).
+            </p>
           </div>
 
           <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
             <p className="text-xs text-blue-900 leading-relaxed">
-              Define o valor que esta conta tinha <strong>antes da primeira transação importada</strong>. O BUDGY adiciona-o ao saldo calculado para corresponder à realidade do banco.
+              <strong>Como corrigir:</strong> escreve aqui o saldo real que a tua app do banco mostra agora.
+              O BUDGY calcula a diferença e cria um &quot;Saldo de Abertura&quot; para que tudo bata certo.
             </p>
           </div>
 
           <div>
             <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5 block">
-              Saldo de abertura (MZN)
+              Saldo real actual (MZN)
             </label>
             <input
               type="number"
               step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              value={realBalance}
+              onChange={(e) => setRealBalance(e.target.value)}
               placeholder="Ex: 750000"
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-emerald-500 outline-none"
+              className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-900 focus:border-emerald-500 outline-none"
               autoFocus
             />
-            <p className="text-xs text-gray-400 mt-1">Podes pôr 0 para limpar.</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Vai à app do teu banco e copia o saldo que aparece. Se não souberes ainda, fecha e volta depois.
+            </p>
           </div>
 
           {err && (
@@ -108,7 +124,7 @@ export function OpeningBalanceModal({ account, onClose, onSaved }: Props) {
             className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Guardar
+            Acertar saldo
           </button>
         </div>
       </div>
