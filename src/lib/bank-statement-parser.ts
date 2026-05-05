@@ -533,32 +533,68 @@ export async function parseExcelFile(
     }
 
     if (format === "mobills") {
-      // Mobills Excel may have multiple sheets (Expenses, Incomes, Transfers)
-      // Read ALL sheets and combine them
-      const { parseMobillsCSV } = await import("./mobills-import");
-      const allCSVParts: string[] = [];
+      // The Mobills Excel export typically has 4 sheets:
+      //   "Receitas e Despesas" — combined view (income + expenses)
+      //   "Expenses"            — duplicate subset of the combined sheet
+      //   "Incomes"             — duplicate subset of the combined sheet
+      //   "Transfers"           — different columns: Date, Conta origem, Conta destino, Value
+      //
+      // To avoid duplicates we parse only the combined sheet for income/expense.
+      // If the combined sheet is missing we fall back to Expenses + Incomes.
+      // The Transfers sheet is parsed separately because its column layout is different.
+      const { parseMobillsCSV, parseMobillsTransfersCSV } = await import("./mobills-import");
+      const results: ImportResult[] = [];
 
-      for (const sheetName of workbook.SheetNames) {
-        const ws = workbook.Sheets[sheetName];
-        if (!ws) continue;
+      const sheetByLowerName: Record<string, string> = {};
+      for (const name of workbook.SheetNames) {
+        sheetByLowerName[name.toLowerCase()] = name;
+      }
+
+      const combinedName =
+        sheetByLowerName["receitas e despesas"] ||
+        sheetByLowerName["receitas e despesa"] ||
+        sheetByLowerName["expenses and incomes"] ||
+        sheetByLowerName["all"];
+
+      const sheetToCsv = (name: string): string | null => {
+        const ws = workbook.Sheets[name];
+        if (!ws) return null;
         const csv = XLSX.utils.sheet_to_csv(ws, { FS: "," });
         const lines = csv.split("\n").filter((l) => l.trim().length > 0);
-        if (lines.length < 2) continue;
-        allCSVParts.push(csv);
+        return lines.length >= 2 ? csv : null;
+      };
+
+      if (combinedName) {
+        const csv = sheetToCsv(combinedName);
+        if (csv) results.push(parseMobillsCSV(csv));
+      } else {
+        // Fall back: parse Expenses + Incomes individually
+        for (const name of workbook.SheetNames) {
+          const lower = name.toLowerCase();
+          if (lower === "transfers" || lower === "transferências" || lower === "transferencias") continue;
+          const csv = sheetToCsv(name);
+          if (csv) results.push(parseMobillsCSV(csv));
+        }
       }
 
-      if (allCSVParts.length === 0) {
-        return emptyResult("Ficheiro Excel vazio");
+      // Always parse the Transfers sheet if present
+      const transfersName =
+        sheetByLowerName["transfers"] ||
+        sheetByLowerName["transferências"] ||
+        sheetByLowerName["transferencias"];
+      if (transfersName) {
+        const csv = sheetToCsv(transfersName);
+        if (csv) results.push(parseMobillsTransfersCSV(csv));
       }
 
-      if (allCSVParts.length === 1) {
-        // Single sheet — parse directly
-        return parseMobillsCSV(allCSVParts[0]!);
+      // No combined sheet AND no fallback sheets parsed → first sheet as last resort
+      if (results.length === 0) {
+        const firstCsv = sheetToCsv(firstSheetName);
+        if (!firstCsv) return emptyResult("Ficheiro Excel vazio");
+        return parseMobillsCSV(firstCsv);
       }
 
-      // Multiple sheets — parse each and merge results
-      const results = allCSVParts.map((csv) => parseMobillsCSV(csv));
-      return mergeImportResults(results);
+      return results.length === 1 ? results[0]! : mergeImportResults(results);
     }
 
     const worksheet = workbook.Sheets[firstSheetName];

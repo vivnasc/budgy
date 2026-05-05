@@ -32,6 +32,8 @@ export interface ImportedTransaction {
   mappedCategory: string;
   mappedSubcategory?: string;
   account: string;
+  /** For type="transfer": the destination account name. */
+  transferToAccount?: string;
   amount: number;
   type: "income" | "expense" | "transfer";
   tags: string[];
@@ -978,6 +980,150 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       headerRowIndex: 0,
       sampleRow,
     },
+  };
+}
+
+// ─── Mobills Transfers Sheet Parser ─────────────────────────────────────────
+
+/**
+ * Parses the Mobills `Transfers` sheet, which has different columns than the
+ * main sheet: `Date, Conta origem, Conta destino, Value, Tags`.
+ *
+ * Each row creates ONE transaction with type="transfer", linking source
+ * account → destination account. These should NOT be counted as income.
+ */
+export function parseMobillsTransfersCSV(csvContent: string): ImportResult {
+  const errors: string[] = [];
+  const imported: ImportedTransaction[] = [];
+  let skipped = 0;
+
+  const lines = csvContent
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  if (lines.length < 2) {
+    return emptyTransfersResult();
+  }
+
+  // Detect separator from header
+  const firstLine = lines[0]!;
+  const separator = detectSeparator(firstLine);
+  const headers = firstLine
+    .split(separator === ";" ? ";" : /,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+    .map((h) => h.replace(/^"|"$/g, "").trim());
+
+  // Locate columns: date, source account, destination account, value
+  let dateIdx = -1;
+  let originIdx = -1;
+  let destIdx = -1;
+  let valueIdx = -1;
+  let tagsIdx = -1;
+
+  headers.forEach((h, i) => {
+    const n = normalizeHeader(h);
+    if (dateIdx === -1 && /\bdate|^data\b/.test(n)) dateIdx = i;
+    else if (originIdx === -1 && /(origem|source|from|de\b)/.test(n) && /conta|account/.test(n)) originIdx = i;
+    else if (destIdx === -1 && /(destino|destination|to\b|para)/.test(n) && /conta|account/.test(n)) destIdx = i;
+    else if (valueIdx === -1 && /value|valor|amount/.test(n)) valueIdx = i;
+    else if (tagsIdx === -1 && /\btags?\b/.test(n)) tagsIdx = i;
+  });
+
+  // Fallback: positional layout (Date, Conta origem, Conta destino, Value, Tags)
+  if (dateIdx === -1) dateIdx = 0;
+  if (originIdx === -1) originIdx = 1;
+  if (destIdx === -1) destIdx = 2;
+  if (valueIdx === -1) valueIdx = 3;
+
+  const accountsSet = new Set<string>();
+  const categoryCounts: Record<string, number> = {};
+  let totalTransfers = 0;
+  let minDate = "";
+  let maxDate = "";
+
+  for (let i = 1; i < lines.length; i++) {
+    try {
+      const line = lines[i]!;
+      const values = separator === ";"
+        ? line.split(";").map((v) => v.trim().replace(/^"|"$/g, ""))
+        : parseCSVLine(line);
+
+      const dateRaw = values[dateIdx] ?? "";
+      const origin = (values[originIdx] ?? "").trim();
+      const dest = (values[destIdx] ?? "").trim();
+      const valueRaw = values[valueIdx] ?? "0";
+      const tagsRaw = tagsIdx >= 0 ? (values[tagsIdx] ?? "") : "";
+
+      const date = parseMobillsDate(dateRaw);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        skipped++;
+        continue;
+      }
+
+      const rawAmount = parseMobillsAmount(valueRaw);
+      const amount = Math.abs(rawAmount);
+      if (amount === 0 || !origin || !dest) {
+        skipped++;
+        continue;
+      }
+
+      accountsSet.add(origin);
+      accountsSet.add(dest);
+
+      if (!minDate || date < minDate) minDate = date;
+      if (!maxDate || date > maxDate) maxDate = date;
+      totalTransfers += amount;
+      categoryCounts["Transferência"] = (categoryCounts["Transferência"] || 0) + 1;
+
+      imported.push({
+        date,
+        description: `${origin} → ${dest}`,
+        originalCategory: "Transferência",
+        mappedCategory: "Transferência",
+        mappedSubcategory: "Transferência",
+        account: origin,
+        transferToAccount: dest,
+        amount,
+        type: "transfer",
+        tags: tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [],
+        notes: "",
+        needsReview: false,
+      });
+    } catch {
+      errors.push(`Erro na linha ${i + 1}`);
+      skipped++;
+    }
+  }
+
+  return {
+    success: imported.length > 0,
+    total: lines.length - 1,
+    imported,
+    skipped,
+    errors,
+    categoryMapping: {},
+    accountsFound: Array.from(accountsSet),
+    dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
+    summary: {
+      totalIncome: 0,
+      totalExpenses: 0,
+      totalTransfers,
+      categoryCounts,
+    },
+  };
+}
+
+function emptyTransfersResult(): ImportResult {
+  return {
+    success: false,
+    total: 0,
+    imported: [],
+    skipped: 0,
+    errors: [],
+    categoryMapping: {},
+    accountsFound: [],
+    dateRange: null,
+    summary: { totalIncome: 0, totalExpenses: 0, totalTransfers: 0, categoryCounts: {} },
   };
 }
 

@@ -73,13 +73,17 @@ function getHealthScore(budgets: Budget[], transactions: Transaction[]): number 
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-function getMonthLabel(): string {
-  return new Date().toLocaleDateString("pt-MZ", { month: "long", year: "numeric" });
+function getMonthLabel(referenceDate?: string | null): string {
+  // Show the month of the latest data so the "current month" totals make sense
+  // for users who have just imported historical data.
+  const ref = referenceDate ? new Date(referenceDate + "T00:00:00") : new Date();
+  return ref.toLocaleDateString("pt-MZ", { month: "long", year: "numeric" });
 }
 
 export default function DashboardPage() {
   const { data, loading } = useDashboard();
-  const currentMonth = getMonthLabel();
+  const latestDate = data?.transactions[0]?.date ?? null;
+  const currentMonth = getMonthLabel(latestDate);
 
   const accounts = data?.accounts ?? [];
   const transactions = data?.transactions ?? [];

@@ -98,6 +98,87 @@ export default function ImportarPage() {
       {/* Content */}
       <div className="px-4 py-6">
         {activeTab === "sms" ? <SMSTab /> : <ImportTab />}
+        <ResetDataSection />
+      </div>
+    </div>
+  );
+}
+
+// ─── Reset Data Section ──────────────────────────────────────────────────────
+
+function ResetDataSection() {
+  const [confirming, setConfirming] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const handleReset = async () => {
+    setResetting(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/transactions", { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setDone(true);
+        setConfirming(false);
+        // Force reload so the dashboard reflects the empty state
+        setTimeout(() => window.location.reload(), 1200);
+      } else {
+        setErr(data.error || "Erro ao apagar dados");
+      }
+    } catch {
+      setErr("Erro de rede");
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  return (
+    <div className="mt-10 pt-6 border-t border-gray-100">
+      <div className="bg-red-50 rounded-2xl border border-red-100 p-4">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-red-900">Limpar todos os dados</h3>
+            <p className="text-xs text-red-700 mt-1 leading-relaxed">
+              Apaga todas as contas e transações importadas. Útil quando o último import ficou confuso e
+              queres recomeçar do zero.
+            </p>
+
+            {done ? (
+              <p className="text-xs text-emerald-700 font-semibold mt-3 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" /> Dados apagados. A recarregar...
+              </p>
+            ) : !confirming ? (
+              <button
+                onClick={() => setConfirming(true)}
+                className="mt-3 text-xs font-semibold text-red-700 hover:text-red-900 underline"
+              >
+                Limpar dados
+              </button>
+            ) : (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-red-900 font-semibold">Tens a certeza?</span>
+                <button
+                  onClick={handleReset}
+                  disabled={resetting}
+                  className="text-xs font-semibold bg-red-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                >
+                  {resetting ? "A apagar..." : "Sim, apagar tudo"}
+                </button>
+                <button
+                  onClick={() => setConfirming(false)}
+                  disabled={resetting}
+                  className="text-xs font-semibold bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg"
+                >
+                  Cancelar
+                </button>
+              </div>
+            )}
+
+            {err && <p className="text-xs text-red-800 mt-2">{err}</p>}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -716,6 +797,10 @@ function ImportPreview({
         currency: "MZN",
         date: tx.date,
         description: tx.description,
+        account: tx.account,
+        transfer_to_account: tx.transferToAccount,
+        category_name: tx.mappedCategory,
+        tags: tx.tags,
       }));
 
       const response = await fetch("/api/transactions", {
