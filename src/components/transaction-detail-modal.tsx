@@ -13,10 +13,11 @@ interface TransactionDetailModalProps {
 type Mode = "view" | "edit";
 
 const CATEGORY_OPTIONS_EXPENSE = [
-  "Alimentação", "Restaurantes", "Transporte", "Combustível", "Casa", "Contas",
-  "Comunicação", "Subscrições", "Saúde", "Educação", "Pessoal", "Compras",
-  "Lazer", "Viagens", "Família", "Beleza & Cuidados", "Animais", "Doações",
-  "Taxas Bancárias", "Dívidas", "Levantamento", "Outros",
+  "Alimentação", "Restaurantes", "Transporte", "Combustível", "Automóvel",
+  "Casa", "Empregados Domésticos", "Jardim & Piscina",
+  "Contas", "Comunicação", "Subscrições", "Saúde", "Beleza & Cuidados",
+  "Educação", "Pessoal", "Compras", "Lazer", "Viagens", "Família",
+  "Animais", "Doações", "Taxas Bancárias", "Dívidas", "Levantamento", "Outros",
 ];
 
 const CATEGORY_OPTIONS_INCOME = [

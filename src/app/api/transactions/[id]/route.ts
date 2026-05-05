@@ -160,19 +160,38 @@ async function recalcAccountBalances(
   if (!txs) return;
 
   const balances = new Map<string, number>();
-  for (const id of accountIds) balances.set(id, 0);
+  const predicted = new Map<string, number>();
+  for (const id of accountIds) {
+    balances.set(id, 0);
+    predicted.set(id, 0);
+  }
 
   for (const tx of txs as { account_id: string | null; transfer_to_account_id: string | null; type: string; amount: number; status?: string | null }[]) {
-    if (tx.status && tx.status !== "completed") continue;
+    if (tx.status === "cancelled") continue;
     const amt = Number(tx.amount) || 0;
-    if (tx.account_id && balances.has(tx.account_id)) {
-      const cur = balances.get(tx.account_id)!;
-      if (tx.type === "income") balances.set(tx.account_id, cur + amt);
-      else if (tx.type === "expense" || tx.type === "transfer") balances.set(tx.account_id, cur - amt);
+    const isCompleted = !tx.status || tx.status === "completed";
+
+    if (tx.account_id) {
+      if (predicted.has(tx.account_id)) {
+        const cur = predicted.get(tx.account_id)!;
+        if (tx.type === "income") predicted.set(tx.account_id, cur + amt);
+        else if (tx.type === "expense" || tx.type === "transfer") predicted.set(tx.account_id, cur - amt);
+      }
+      if (isCompleted && balances.has(tx.account_id)) {
+        const cur = balances.get(tx.account_id)!;
+        if (tx.type === "income") balances.set(tx.account_id, cur + amt);
+        else if (tx.type === "expense" || tx.type === "transfer") balances.set(tx.account_id, cur - amt);
+      }
     }
-    if (tx.transfer_to_account_id && balances.has(tx.transfer_to_account_id) && tx.type === "transfer") {
-      const cur = balances.get(tx.transfer_to_account_id)!;
-      balances.set(tx.transfer_to_account_id, cur + amt);
+    if (tx.transfer_to_account_id && tx.type === "transfer") {
+      if (predicted.has(tx.transfer_to_account_id)) {
+        const cur = predicted.get(tx.transfer_to_account_id)!;
+        predicted.set(tx.transfer_to_account_id, cur + amt);
+      }
+      if (isCompleted && balances.has(tx.transfer_to_account_id)) {
+        const cur = balances.get(tx.transfer_to_account_id)!;
+        balances.set(tx.transfer_to_account_id, cur + amt);
+      }
     }
   }
 
@@ -181,7 +200,7 @@ async function recalcAccountBalances(
       supabase
         .schema("money_schema")
         .from("accounts")
-        .update({ balance })
+        .update({ balance, balance_predicted: predicted.get(id) ?? balance })
         .eq("id", id)
         .eq("user_id", userId)
     )

@@ -7,6 +7,8 @@ interface AccountCardProps {
   type: string;
   icon: React.ComponentType<{ className?: string }>;
   balance: number;
+  /** Optional. When supplied and different from `balance`, a "Previsto" row is shown. */
+  balancePredicted?: number;
   currency: string;
   color: string;
   lastTransaction: string;
@@ -18,11 +20,15 @@ export function AccountCard({
   type,
   icon: Icon,
   balance,
+  balancePredicted,
   currency,
   color,
   lastTransaction,
   lastTransactionDate,
 }: AccountCardProps) {
+  const showPredicted =
+    typeof balancePredicted === "number" && balancePredicted !== balance;
+
   return (
     <div className="card p-4 hover:shadow-soft active:bg-gray-50 transition-all cursor-pointer">
       <div className="flex items-center gap-3">
@@ -42,22 +48,35 @@ export function AccountCard({
             </span>
           </div>
 
-          <p className="text-lg font-bold mt-0.5">
+          <p className={`text-lg font-bold mt-0.5 ${balance < 0 ? "text-red-600" : ""}`}>
             {balance.toLocaleString("pt-MZ")}{" "}
             <span className="text-xs font-normal text-[var(--color-text-muted)]">
               {currency}
             </span>
           </p>
 
-          <div className="flex items-center gap-1 mt-1">
-            <span className="text-xs text-[var(--color-text-muted)]">
-              {lastTransaction}
-            </span>
-            <span className="w-1 h-1 bg-gray-300 rounded-full" />
-            <span className="text-xs text-[var(--color-text-muted)]">
-              {lastTransactionDate}
-            </span>
-          </div>
+          {showPredicted && (
+            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+              Previsto:{" "}
+              <span className={`font-semibold ${balancePredicted! < 0 ? "text-red-500" : "text-emerald-600"}`}>
+                {balancePredicted!.toLocaleString("pt-MZ")} {currency}
+              </span>
+            </p>
+          )}
+
+          {(lastTransaction || lastTransactionDate) && (
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-xs text-[var(--color-text-muted)]">
+                {lastTransaction}
+              </span>
+              {lastTransaction && lastTransactionDate && (
+                <span className="w-1 h-1 bg-gray-300 rounded-full" />
+              )}
+              <span className="text-xs text-[var(--color-text-muted)]">
+                {lastTransactionDate}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Arrow */}

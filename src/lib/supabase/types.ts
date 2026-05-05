@@ -20,7 +20,10 @@ export interface Account {
   name: string;
   type: AccountType;
   currency: string;
+  /** Sum of completed transactions only (real cash). */
   balance: number;
+  /** Sum of completed + pending transactions (Mobills-style "saldo previsto"). */
+  balance_predicted: number;
   color: string | null;
   icon: string | null;
   is_active: boolean;
