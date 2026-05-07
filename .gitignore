@@ -5,6 +5,13 @@ node_modules/
 .next/
 out/
 
+# OpenNext / Cloudflare build output
+.open-next/
+
+# Wrangler local state
+.wrangler/
+.dev.vars
+
 # production
 build/
 dist/
