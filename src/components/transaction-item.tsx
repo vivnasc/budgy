@@ -108,6 +108,14 @@ export function TransactionItem({
               Cancelada
             </span>
           )}
+          {category === "Ajuste de Saldo" && (
+            <span
+              className="flex-shrink-0 text-2xs font-bold uppercase tracking-wider bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded"
+              title="Calibração contabilística — não conta como movimento real"
+            >
+              Ajuste
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 mt-0.5">
           <span className="text-xs text-[var(--color-text-muted)]">

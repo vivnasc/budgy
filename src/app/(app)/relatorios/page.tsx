@@ -171,8 +171,11 @@ export default function RelatoriosPage() {
   const { data: transactions, loading } = useTransactions({ from, to, limit: 5000 });
   const { data: prevTransactions } = useTransactions({ from: prevFrom, to: prevTo, limit: 5000 });
 
-  const allTx = transactions ?? [];
-  const prevTx = prevTransactions ?? [];
+  // Ajustes de saldo são apenas calibração contabilística — não devem
+  // entrar nos totais nem nos pies de "para onde vai o dinheiro"
+  const isAdjustment = (t: Transaction) => t.categories?.name === "Ajuste de Saldo";
+  const allTx = (transactions ?? []).filter((t) => !isAdjustment(t));
+  const prevTx = (prevTransactions ?? []).filter((t) => !isAdjustment(t));
 
   const totalIncome = allTx.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
   const totalExpense = allTx.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);

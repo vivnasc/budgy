@@ -96,9 +96,16 @@ export default function DashboardPage() {
   const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
   const totalPredicted = accounts.reduce((sum, acc) => sum + (acc.balance_predicted ?? acc.balance), 0);
   // Receitas/despesas só somam o que está realmente "completed" — pendentes
-  // e canceladas não devem inflar nem reduzir o que se gastou/recebeu
+  // e canceladas não devem inflar nem reduzir o que se gastou/recebeu.
+  // Saldos de Abertura (categoria "Ajuste de Saldo") existem apenas para
+  // calibrar o saldo da conta, não representam movimento real.
   const completedTx = useMemo(
-    () => transactions.filter((t) => !t.status || t.status === "completed"),
+    () =>
+      transactions.filter(
+        (t) =>
+          (!t.status || t.status === "completed") &&
+          t.categories?.name !== "Ajuste de Saldo"
+      ),
     [transactions]
   );
   const totalIncome = useMemo(

@@ -93,12 +93,16 @@ export async function POST(
 
     if (openingAmount !== 0) {
       const isPositive = openingAmount > 0;
+      // Resolve (or create) the dedicated "Ajuste de Saldo" category so the
+      // opening-balance row doesn't pollute the user's spending/income pies.
+      const categoryId = await ensureAdjustmentCategory(supabase, user.id, isPositive ? "income" : "expense");
       const { error: insErr } = await supabase
         .schema("money_schema")
         .from("transactions")
         .insert({
           user_id: user.id,
           account_id: id,
+          category_id: categoryId,
           type: isPositive ? "income" : "expense",
           amount: Math.abs(openingAmount),
           currency: "MZN",
@@ -122,6 +126,42 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
+}
+
+/**
+ * Returns the id of the user's "Ajuste de Saldo" category, creating it if it
+ * doesn't yet exist. This category is intentionally excluded from spending /
+ * income breakdowns in the dashboard and reports.
+ */
+async function ensureAdjustmentCategory(
+  supabase: SupabaseClient,
+  userId: string,
+  type: "income" | "expense"
+): Promise<string | undefined> {
+  const { data: existing } = await supabase
+    .schema("money_schema")
+    .from("categories")
+    .select("id, type")
+    .or(`user_id.is.null,user_id.eq.${userId}`)
+    .ilike("name", "Ajuste de Saldo");
+
+  const match = (existing as { id: string; type: string }[] | null)?.find((c) => c.type === type);
+  if (match) return match.id;
+
+  const { data: created } = await supabase
+    .schema("money_schema")
+    .from("categories")
+    .insert({
+      user_id: userId,
+      name: "Ajuste de Saldo",
+      type,
+      icon: "scale",
+      color: "#94A3B8",
+      is_system: false,
+    })
+    .select("id")
+    .single();
+  return (created as { id: string } | null)?.id;
 }
 
 /**
