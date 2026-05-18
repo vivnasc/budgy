@@ -158,11 +158,17 @@ export default function DashboardPage() {
 
   const isEmpty = accounts.length === 0 && transactions.length === 0;
 
-  // Detecta dados estragados de imports antigos: transações sem conta ligada,
-  // ou contas todas com saldo zero apesar de existirem transações. Quando
-  // detectado, mostramos um banner pedindo para limpar e reimportar.
+  // Detecta dados estragados de imports antigos:
+  //   - transações sem conta ligada (account_id NULL), OU
+  //   - contas todas com saldo zero APESAR de existirem várias transações
+  //     completadas (indica que o recalc ainda não correu sobre os dados)
+  // Não dispara para utilizadores novos sem movimentos.
   const orphanedTransactions = transactions.filter((t) => !t.account_id).length;
-  const allAccountsZero = accounts.length > 0 && accounts.every((a) => Number(a.balance) === 0);
+  const completedCount = transactions.filter((t) => !t.status || t.status === "completed").length;
+  const allAccountsZero =
+    accounts.length > 0 &&
+    completedCount >= 5 &&
+    accounts.every((a) => Number(a.balance) === 0);
   const dataLooksBroken = transactions.length > 0 && (orphanedTransactions > 0 || allAccountsZero);
 
   return (

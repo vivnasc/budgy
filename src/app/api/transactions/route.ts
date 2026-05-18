@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/auth/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AccountType } from "@/lib/supabase/types";
+import { persistAccountBalances } from "@/lib/account-balances";
 
 /**
  * GET /api/transactions
@@ -162,7 +163,7 @@ export async function POST(request: Request) {
         if (tx.account_id) touched.add(tx.account_id);
         if (tx.transfer_to_account_id) touched.add(tx.transfer_to_account_id);
       }
-      await recalcAccountBalances(supabase, user.id, Array.from(touched));
+      await persistAccountBalances(supabase, user.id, Array.from(touched));
 
       return NextResponse.json({
         success: true,
@@ -209,7 +210,7 @@ export async function POST(request: Request) {
       const touched: string[] = [];
       if (transaction.account_id) touched.push(transaction.account_id);
       if (transaction.transfer_to_account_id) touched.push(transaction.transfer_to_account_id);
-      if (touched.length) await recalcAccountBalances(supabase, user.id, touched);
+      if (touched.length) await persistAccountBalances(supabase, user.id, touched);
 
       return NextResponse.json({ success: true, transaction: data });
     }
@@ -426,72 +427,3 @@ async function resolveCategoryIds(
   return map;
 }
 
-/**
- * Recomputes the running balance for each account from its transactions:
- *   balance = sum(income) - sum(expense) - sum(transfers_out) + sum(transfers_in)
- */
-async function recalcAccountBalances(
-  supabase: SupabaseClient,
-  userId: string,
-  accountIds: string[]
-): Promise<void> {
-  if (accountIds.length === 0) return;
-
-  const { data: txs } = await supabase
-    .schema("money_schema")
-    .from("transactions")
-    .select("account_id, transfer_to_account_id, type, amount, status")
-    .eq("user_id", userId);
-
-  if (!txs) return;
-
-  // Two parallel running totals per account:
-  //   balance           → only 'completed' transactions
-  //   balance_predicted → 'completed' + 'pending' (excludes 'cancelled')
-  const balances = new Map<string, number>();
-  const predicted = new Map<string, number>();
-  for (const id of accountIds) {
-    balances.set(id, 0);
-    predicted.set(id, 0);
-  }
-
-  for (const tx of txs as { account_id: string | null; transfer_to_account_id: string | null; type: string; amount: number; status?: string | null }[]) {
-    if (tx.status === "cancelled") continue;
-    const amt = Number(tx.amount) || 0;
-    const isCompleted = !tx.status || tx.status === "completed";
-
-    if (tx.account_id) {
-      if (predicted.has(tx.account_id)) {
-        const cur = predicted.get(tx.account_id)!;
-        if (tx.type === "income") predicted.set(tx.account_id, cur + amt);
-        else if (tx.type === "expense" || tx.type === "transfer") predicted.set(tx.account_id, cur - amt);
-      }
-      if (isCompleted && balances.has(tx.account_id)) {
-        const cur = balances.get(tx.account_id)!;
-        if (tx.type === "income") balances.set(tx.account_id, cur + amt);
-        else if (tx.type === "expense" || tx.type === "transfer") balances.set(tx.account_id, cur - amt);
-      }
-    }
-    if (tx.transfer_to_account_id && tx.type === "transfer") {
-      if (predicted.has(tx.transfer_to_account_id)) {
-        const cur = predicted.get(tx.transfer_to_account_id)!;
-        predicted.set(tx.transfer_to_account_id, cur + amt);
-      }
-      if (isCompleted && balances.has(tx.transfer_to_account_id)) {
-        const cur = balances.get(tx.transfer_to_account_id)!;
-        balances.set(tx.transfer_to_account_id, cur + amt);
-      }
-    }
-  }
-
-  await Promise.all(
-    Array.from(balances.entries()).map(([id, balance]) =>
-      supabase
-        .schema("money_schema")
-        .from("accounts")
-        .update({ balance, balance_predicted: predicted.get(id) ?? balance })
-        .eq("id", id)
-        .eq("user_id", userId)
-    )
-  );
-}

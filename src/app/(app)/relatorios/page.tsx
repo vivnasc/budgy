@@ -52,6 +52,9 @@ function groupByCategory(transactions: Transaction[], type: "expense" | "income"
   const map = new Map<string, number>();
   for (const tx of transactions) {
     if (tx.type !== type) continue;
+    // Defensive: skip cancelled and ajustes mesmo se o caller esquecer
+    if (tx.status === "cancelled") continue;
+    if (tx.categories?.name === "Ajuste de Saldo") continue;
     const cat = tx.categories?.name ?? "Outros";
     map.set(cat, (map.get(cat) ?? 0) + tx.amount);
   }

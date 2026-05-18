@@ -925,7 +925,10 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       //      money has not actually moved yet — typical for scheduled bills
       //      and salaries that the user added in advance)
       //   3. Default to completed
-      const todayISO = new Date().toISOString().split("T")[0]!;
+      // Compute "today" in Maputo time (UTC+2) so transactions for "today"
+      // don't get auto-promoted at midnight UTC (02:00 local).
+      const nowMaputo = new Date(Date.now() + 2 * 60 * 60 * 1000);
+      const todayISO = nowMaputo.toISOString().split("T")[0]!;
       const parsedStatus = parseTransactionStatus(row.status || "");
       const status: "pending" | "completed" | "cancelled" =
         row.status && row.status.trim()
