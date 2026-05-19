@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/auth/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { persistAccountBalances, getBalanceForAccount } from "@/lib/account-balances";
 
 /**
  * POST /api/accounts/[id]/opening-balance
@@ -59,10 +60,12 @@ export async function POST(
     let openingAmount: number;
 
     if (typeof body?.current_real_balance === "number" && Number.isFinite(body.current_real_balance)) {
-      // Mode A: user gave the real balance — compute opening so totals match
+      // Mode A: user gave the real balance — compute opening so totals match.
+      // Note: we just deleted any existing opening row, so the current sum
+      // does NOT include a previous opening balance.
       const realBalance = Number(body.current_real_balance);
-      const sum = await sumTransactionsForAccount(supabase, user.id, id);
-      openingAmount = realBalance - sum;
+      const { balance: sumWithoutOpening } = await getBalanceForAccount(supabase, user.id, id);
+      openingAmount = realBalance - sumWithoutOpening;
     } else if (typeof body?.amount === "number" && Number.isFinite(body.amount)) {
       // Mode B: explicit opening balance
       openingAmount = Number(body.amount);
@@ -93,12 +96,16 @@ export async function POST(
 
     if (openingAmount !== 0) {
       const isPositive = openingAmount > 0;
+      // Resolve (or create) the dedicated "Ajuste de Saldo" category so the
+      // opening-balance row doesn't pollute the user's spending/income pies.
+      const categoryId = await ensureAdjustmentCategory(supabase, user.id, isPositive ? "income" : "expense");
       const { error: insErr } = await supabase
         .schema("money_schema")
         .from("transactions")
         .insert({
           user_id: user.id,
           account_id: id,
+          category_id: categoryId,
           type: isPositive ? "income" : "expense",
           amount: Math.abs(openingAmount),
           currency: "MZN",
@@ -109,51 +116,59 @@ export async function POST(
       if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
     }
 
-    // Recompute the account balance now that the opening row is in place
-    const newBalance = await sumTransactionsForAccount(supabase, user.id, id);
-    await supabase
-      .schema("money_schema")
-      .from("accounts")
-      .update({ balance: newBalance })
-      .eq("id", id)
-      .eq("user_id", user.id);
+    // Recompute balance + balance_predicted for this account (single source
+    // of truth for both fields)
+    await persistAccountBalances(supabase, user.id, [id]);
+    const { balance: newBalance, balance_predicted } = await getBalanceForAccount(
+      supabase,
+      user.id,
+      id
+    );
 
-    return NextResponse.json({ success: true, balance: newBalance, openingAmount });
+    return NextResponse.json({
+      success: true,
+      balance: newBalance,
+      balance_predicted,
+      openingAmount,
+    });
   } catch {
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }
 }
 
 /**
- * Sums all 'completed' transactions affecting a single account
- * (income +, expense −, transfer out −, transfer in +).
+ * Returns the id of the user's "Ajuste de Saldo" category, creating it if it
+ * doesn't yet exist. This category is intentionally excluded from spending /
+ * income breakdowns in the dashboard and reports.
  */
-async function sumTransactionsForAccount(
+async function ensureAdjustmentCategory(
   supabase: SupabaseClient,
   userId: string,
-  accountId: string
-): Promise<number> {
-  const { data: txs } = await supabase
+  type: "income" | "expense"
+): Promise<string | undefined> {
+  const { data: existing } = await supabase
     .schema("money_schema")
-    .from("transactions")
-    .select("account_id, transfer_to_account_id, type, amount, status")
-    .eq("user_id", userId);
+    .from("categories")
+    .select("id, type")
+    .or(`user_id.is.null,user_id.eq.${userId}`)
+    .ilike("name", "Ajuste de Saldo");
 
-  let balance = 0;
-  for (const tx of (txs || []) as {
-    account_id: string | null;
-    transfer_to_account_id: string | null;
-    type: string;
-    amount: number;
-    status?: string | null;
-  }[]) {
-    if (tx.status && tx.status !== "completed") continue;
-    const amt = Number(tx.amount) || 0;
-    if (tx.account_id === accountId) {
-      if (tx.type === "income") balance += amt;
-      else if (tx.type === "expense" || tx.type === "transfer") balance -= amt;
-    }
-    if (tx.transfer_to_account_id === accountId && tx.type === "transfer") balance += amt;
-  }
-  return balance;
+  const match = (existing as { id: string; type: string }[] | null)?.find((c) => c.type === type);
+  if (match) return match.id;
+
+  const { data: created } = await supabase
+    .schema("money_schema")
+    .from("categories")
+    .insert({
+      user_id: userId,
+      name: "Ajuste de Saldo",
+      type,
+      icon: "scale",
+      color: "#94A3B8",
+      is_system: false,
+    })
+    .select("id")
+    .single();
+  return (created as { id: string } | null)?.id;
 }
+

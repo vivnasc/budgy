@@ -1,7 +1,21 @@
 import type { NextConfig } from "next";
 
+// Wire up the OpenNext dev hook so `next dev` exposes the Cloudflare runtime
+// (env, bindings) when developing locally. Only loaded in dev to avoid
+// pulling the adapter into the Vercel production build.
+if (process.env.NODE_ENV === "development") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { initOpenNextCloudflareForDev } = require("@opennextjs/cloudflare");
+  initOpenNextCloudflareForDev();
+}
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Cloudflare Workers don't run the Next.js Image Optimizer by default.
+  // Skip optimization so <Image> works there. (No regression on Vercel.)
+  images: {
+    unoptimized: true,
+  },
 
   async headers() {
     return [
