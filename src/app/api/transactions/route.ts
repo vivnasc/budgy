@@ -165,11 +165,30 @@ export async function POST(request: Request) {
       }
       await persistAccountBalances(supabase, user.id, Array.from(touched));
 
+      // Automatic calibration: if the import detected an opening balance in
+      // the bank statement (CPC's "OPENING BALANCE", Moza's "Saldo de
+      // Abertura"), create the Saldo de Abertura tx for that account so the
+      // balance matches reality without any manual computation.
+      const opens = (body.openingBalances || []) as Array<{
+        accountName: string;
+        amount: number;
+        date: string;
+      }>;
+      const calibrated: string[] = [];
+      for (const ob of opens) {
+        if (!ob?.accountName || typeof ob.amount !== "number") continue;
+        const accId = accountIds.get(normalizeAccountKey(ob.accountName));
+        if (!accId) continue;
+        await applyOpeningBalance(supabase, user.id, accId, ob.amount, ob.date);
+        calibrated.push(ob.accountName);
+      }
+
       return NextResponse.json({
         success: true,
         count: data?.length || 0,
         duplicates,
         transactions: data,
+        calibratedAccounts: calibrated,
         message: duplicates > 0
           ? `${data?.length} importadas, ${duplicates} duplicadas ignoradas.`
           : undefined,
@@ -425,5 +444,117 @@ async function resolveCategoryIds(
   }
 
   return map;
+}
+
+/**
+ * Calibrate an account so its running balance matches what the bank says it
+ * was at `referenceDate`. Used after importing a bank statement that carries
+ * the "OPENING BALANCE" / "Saldo de Abertura" header — the user doesn't have
+ * to compute anything.
+ *
+ * Replaces any existing "Saldo de Abertura" entry for the account and creates
+ * a fresh one with category "Ajuste de Saldo" so it doesn't pollute the pies.
+ */
+async function applyOpeningBalance(
+  supabase: SupabaseClient,
+  userId: string,
+  accountId: string,
+  bankBalanceAtRefDate: number,
+  referenceDate: string
+): Promise<void> {
+  // 1. Wipe any existing opening-balance marker
+  await supabase
+    .schema("money_schema")
+    .from("transactions")
+    .delete()
+    .eq("user_id", userId)
+    .eq("account_id", accountId)
+    .eq("description", "Saldo de Abertura");
+
+  // 2. Sum BUDGY's tracked movements for this account strictly BEFORE the
+  // reference date (the bank balance is "as of" that date — i.e. it already
+  // reflects everything earlier in the bank's view of things)
+  const { data: txs } = await supabase
+    .schema("money_schema")
+    .from("transactions")
+    .select("account_id, transfer_to_account_id, type, amount, status, date")
+    .eq("user_id", userId)
+    .lt("date", referenceDate);
+
+  let budgySum = 0;
+  for (const tx of (txs || []) as {
+    account_id: string | null;
+    transfer_to_account_id: string | null;
+    type: string;
+    amount: number;
+    status?: string | null;
+  }[]) {
+    if (tx.status === "cancelled") continue;
+    const isCompleted = !tx.status || tx.status === "completed";
+    if (!isCompleted) continue;
+    const amt = Number(tx.amount) || 0;
+    if (tx.account_id === accountId) {
+      if (tx.type === "income") budgySum += amt;
+      else if (tx.type === "expense" || tx.type === "transfer") budgySum -= amt;
+    }
+    if (tx.transfer_to_account_id === accountId && tx.type === "transfer") {
+      budgySum += amt;
+    }
+  }
+
+  const diff = bankBalanceAtRefDate - budgySum;
+  if (diff !== 0) {
+    // Resolve the "Ajuste de Saldo" category for this user (created on demand)
+    const catType: "income" | "expense" = diff > 0 ? "income" : "expense";
+    const { data: existingCats } = await supabase
+      .schema("money_schema")
+      .from("categories")
+      .select("id, type")
+      .or(`user_id.is.null,user_id.eq.${userId}`)
+      .ilike("name", "Ajuste de Saldo");
+    let categoryId = (existingCats as { id: string; type: string }[] | null)?.find(
+      (c) => c.type === catType
+    )?.id;
+    if (!categoryId) {
+      const { data: created } = await supabase
+        .schema("money_schema")
+        .from("categories")
+        .insert({
+          user_id: userId,
+          name: "Ajuste de Saldo",
+          type: catType,
+          icon: "scale",
+          color: "#94A3B8",
+          is_system: false,
+        })
+        .select("id")
+        .single();
+      categoryId = (created as { id: string } | null)?.id;
+    }
+
+    // Date the entry one day before the bank's reference date so it sits
+    // strictly before all the period's movements in BUDGY too
+    const d = new Date(referenceDate + "T00:00:00");
+    d.setDate(d.getDate() - 1);
+    const openingDate = d.toISOString().split("T")[0]!;
+
+    await supabase
+      .schema("money_schema")
+      .from("transactions")
+      .insert({
+        user_id: userId,
+        account_id: accountId,
+        category_id: categoryId,
+        type: catType,
+        amount: Math.abs(diff),
+        currency: "MZN",
+        description: "Saldo de Abertura",
+        date: openingDate,
+        status: "completed",
+      });
+  }
+
+  // 3. Recompute the account's balance & balance_predicted
+  await persistAccountBalances(supabase, userId, [accountId]);
 }
 
