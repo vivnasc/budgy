@@ -38,6 +38,21 @@ const SYSTEM_RULES: CategorizationRule[] = [
   // ── Supermarkets & Groceries (from real bank data) ──
   { pattern: "shoprite", isRegex: false, category: "Alimentação", confidence: 0.95, confirmCount: 0, source: "system" },
   { pattern: "superspar", isRegex: false, category: "Alimentação", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "antario", isRegex: false, category: "Alimentação", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "sweet sour", isRegex: false, category: "Restaurantes", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "concha cafe", isRegex: false, category: "Restaurantes", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "makro", isRegex: false, category: "Compras", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "lebombo slaghuis", isRegex: false, category: "Alimentação", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "vetpets", isRegex: false, category: "Animais", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "runway", isRegex: false, category: "Subscrições", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "openai", isRegex: false, category: "Subscrições", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "credelec", isRegex: false, category: "Contas", confidence: 0.98, confirmCount: 0, source: "system" },
+  { pattern: "recarga credelec", isRegex: false, category: "Contas", confidence: 0.98, confirmCount: 0, source: "system" },
+  { pattern: "edm", isRegex: false, category: "Contas", confidence: 0.85, confirmCount: 0, source: "system" },
+  { pattern: "refund", isRegex: false, category: "Reembolso", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "vivianne laura dos santos", isRegex: false, category: "Transferência", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "transferencias recebidas", isRegex: false, category: "Transferência", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "mozabanco enet uot", isRegex: false, category: "Transferência", confidence: 0.9, confirmCount: 0, source: "system" },
   { pattern: "spar", isRegex: false, category: "Alimentação", confidence: 0.95, confirmCount: 0, source: "system" },
   { pattern: "mega distrib", isRegex: false, category: "Alimentação", confidence: 0.95, confirmCount: 0, source: "system" },
   { pattern: "mega distribuicao", isRegex: false, category: "Alimentação", confidence: 0.95, confirmCount: 0, source: "system" },
@@ -501,18 +516,74 @@ export function autoCategorize(
     }
   }
 
-  // 4. Default
-  const defaults: Record<string, string> = {
-    income: "Outro Rendimento",
-    expense: "Outros",
-    transfer: "Transferência",
-  };
+  // 4. Heuristic fallbacks — better to put something likely-right than to
+  // dump every unfamiliar merchant into "Outros". The user prefers a wrong
+  // bucket they can re-tag over a meaningless one.
+  if (type === "expense") {
+    const n = normalized;
+    // Anything that smells like food / a supermarket
+    if (/\b(supermer|merc|mart|lojinh|grocer)/.test(n)) {
+      return { category: "Alimentação", confidence: 0.55, reason: "Heurística: alimentação" };
+    }
+    // Restaurants / takeaway / food joints
+    if (/\b(cafe|caf[eé]|restaurant|rest\b|burger|pizza|sushi|kfc|nando|cafetaria)/.test(n)) {
+      return { category: "Restaurantes", confidence: 0.55, reason: "Heurística: restaurantes" };
+    }
+    // Pharmacy / health
+    if (/\b(farmac|pharm|hosp|clinic|medic|terapia|dentist|psicolog)/.test(n)) {
+      return { category: "Saúde", confidence: 0.55, reason: "Heurística: saúde" };
+    }
+    // Utilities
+    if (/\b(edm|fipag|electric|water|agua|gas\b|gaz\b|energia|electricidade)/.test(n)) {
+      return { category: "Contas", confidence: 0.55, reason: "Heurística: contas" };
+    }
+    // Fuel
+    if (/\b(posto|combust|fuel|petro|galp|engen)/.test(n)) {
+      return { category: "Combustível", confidence: 0.55, reason: "Heurística: combustível" };
+    }
+    // Transport
+    if (/\b(uber|bolt|yango|taxi|chapa)/.test(n)) {
+      return { category: "Transporte", confidence: 0.6, reason: "Heurística: transporte" };
+    }
+    // Education
+    if (/\b(school|escola|university|universidad|propin|colegio|ensino)/.test(n)) {
+      return { category: "Educação", confidence: 0.55, reason: "Heurística: educação" };
+    }
+    // Pets
+    if (/\b(pet|vet\b|animal|canid|felin)/.test(n)) {
+      return { category: "Animais", confidence: 0.55, reason: "Heurística: animais" };
+    }
+    // Subscription / online software (often has www/dot-com)
+    if (/\.(com|io|ai|net)\b|\bwww\b|subscription|subscript/.test(n)) {
+      return { category: "Subscrições", confidence: 0.5, reason: "Heurística: subscrição" };
+    }
+    // Bank fees / fiscal
+    if (/\b(imposto|comiss|taxa\b|anuidade|juros)/.test(n)) {
+      return { category: "Taxas Bancárias", confidence: 0.55, reason: "Heurística: taxas" };
+    }
+    // Looks like a merchant purchase (Purchase / Compra prefix) but we don't
+    // recognise the name → "Compras" beats "Outros" for spending visualisation
+    if (n.length >= 3) {
+      return { category: "Compras", confidence: 0.35, reason: "Heurística genérica: compras" };
+    }
+    return { category: "Outros", confidence: 0.1, reason: "Sem padrão reconhecido" };
+  }
 
-  return {
-    category: defaults[type] || "Outros",
-    confidence: 0.1,
-    reason: "Sem padrão reconhecido",
-  };
+  if (type === "income") {
+    const n = normalized;
+    if (/\b(transferencia|transfer)/.test(n)) {
+      return { category: "Transferência", confidence: 0.55, reason: "Heurística: transferência" };
+    }
+    if (/\b(refund|reembolso|devolu)/.test(n)) {
+      return { category: "Reembolso", confidence: 0.6, reason: "Heurística: reembolso" };
+    }
+    if (amount && amount > 50000) {
+      return { category: "Salário", confidence: 0.5, reason: "Heurística: valor alto" };
+    }
+    return { category: "Outro Rendimento", confidence: 0.35, reason: "Heurística: rendimento" };
+  }
+
+  return { category: "Transferência", confidence: 0.5, reason: "Tipo transferência" };
 }
 
 /**

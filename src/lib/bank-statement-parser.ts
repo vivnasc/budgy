@@ -365,6 +365,31 @@ function extractMozaDescription(raw: string): string {
   // Clean levantamento prefix: "Levantamento 402546******2463 Mv80 PRACA"
   desc = desc.replace(/^Levantamento\s+\d+\*+\d+\s+Mv\d*\s*/i, "Levantamento ");
 
+  // Clean "Purchase MERCHANT 9635985 ENET- Suspensa UOT POS-VISA" patterns.
+  // The merchant name sits between "Purchase" and the 6-7 digit terminal id.
+  // Examples:
+  //   "Purchase NETFLIXCOM 40872 9635985 ENET- Suspensa UOT POS-VISA"
+  //   "Purchase ANTARIO SUPERMER 9635985 ENET Suspensa UOT-POS REDE"
+  if (/^Purchase\s+/i.test(desc)) {
+    desc = desc
+      .replace(/^Purchase\s+/i, "")
+      // Strip terminal id + ENET POS noise from the end
+      .replace(/\s+\d{6,}\s*ENET[\s-]*Suspens[ao]\s*UOT[\s-]*POS[\s-]*(?:REDE|VISA).*$/i, "")
+      .replace(/\s+\d{6,}\s*ENET.*$/i, "")
+      .trim();
+  }
+
+  // Clean "Compra Recarga Credelec EDM Susp. CREDELEC Netplus" patterns
+  // (utility recharges via Netplus)
+  if (/Recarga\s+Credelec|EDM\s+Susp|CREDELEC/i.test(desc)) {
+    desc = "Recarga Credelec EDM";
+  }
+
+  // Strip generic transfer-banking suffixes
+  desc = desc.replace(/\s*ENET[\s-]*Suspens[ao]\s*UOT[\s-]*POS[\s-]*(?:REDE|VISA)\s*$/i, "");
+  desc = desc.replace(/\s*ENET\s+UOT\s+Transferencias\s+Recebidas\s*$/i, "");
+  desc = desc.trim();
+
   // Clean M-Pesa transfer format: "TRF_Cart_Dig_Mpesa846313848"
   if (/^TRF_Cart_Dig_Mpesa/i.test(desc)) {
     const phone = desc.replace(/^TRF_Cart_Dig_Mpesa/i, "");

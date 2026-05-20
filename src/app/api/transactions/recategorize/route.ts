@@ -120,14 +120,17 @@ export async function POST() {
 
       let nextCategoryId: string | undefined;
 
-      if (result.category && result.category !== "Outros" && result.category !== "Outro Rendimento") {
-        if (result.confidence >= 0.5) {
-          // Strong match — overrides whatever is set
-          nextCategoryId = await ensureCategory(result.category, catType);
-        } else if (result.confidence >= 0.3 && isUncategorised) {
-          // Weak match — only fill in if the row had nothing yet
-          nextCategoryId = await ensureCategory(result.category, catType);
-        }
+      // Preserve manual edits. Only categorize if the row is currently
+      // uncategorised (NULL or "Outros"). Any reasonable match (≥0.3)
+      // is acceptable in that case — beats leaving it as "Outros".
+      if (
+        isUncategorised &&
+        result.category &&
+        result.category !== "Outros" &&
+        result.category !== "Outro Rendimento" &&
+        result.confidence >= 0.3
+      ) {
+        nextCategoryId = await ensureCategory(result.category, catType);
       }
 
       // Fall back to learning from siblings with the same description
