@@ -3,8 +3,13 @@
  *
  * For each account computes two values from the transaction log:
  *   - balance:           sum of 'completed' transactions only (real cash moved)
- *   - balance_predicted: sum of 'completed' + 'pending' transactions (cancelled
- *                        is always excluded). Mobills-style "saldo previsto".
+ *   - balance_predicted: balance + pending transactions whose date falls within
+ *                        the CURRENT month. Matches Mobills' "Saldo Previsto"
+ *                        — i.e. "what will the balance be at the end of this
+ *                        month if every scheduled bill / income clears as
+ *                        planned". Pending transactions beyond this month are
+ *                        ignored to avoid a year of future bills inflating
+ *                        the headline number.
  *
  * Transactions categorised as "Ajuste de Saldo" still count (they represent
  * calibration entries the user explicitly created). They're filtered out of
@@ -19,11 +24,23 @@ interface TxRow {
   type: string;
   amount: number;
   status?: string | null;
+  date?: string | null;
 }
 
 export interface AccountBalances {
   balance: number;
   balance_predicted: number;
+}
+
+function endOfCurrentMonthMaputoISO(): string {
+  // Maputo is UTC+2 year-round (no DST). Adjust now to local before computing
+  // the end of the current month.
+  const nowLocal = new Date(Date.now() + 2 * 60 * 60 * 1000);
+  const y = nowLocal.getUTCFullYear();
+  const m = nowLocal.getUTCMonth();
+  // last day of current month = day 0 of next month
+  const lastDay = new Date(Date.UTC(y, m + 1, 0));
+  return lastDay.toISOString().split("T")[0]!;
 }
 
 /**
@@ -37,8 +54,10 @@ export async function computeAccountBalances(
   const { data: txs } = await supabase
     .schema("money_schema")
     .from("transactions")
-    .select("account_id, transfer_to_account_id, type, amount, status")
+    .select("account_id, transfer_to_account_id, type, amount, status, date")
     .eq("user_id", userId);
+
+  const endOfMonth = endOfCurrentMonthMaputoISO();
 
   const out = new Map<string, AccountBalances>();
   const ensure = (id: string): AccountBalances => {
@@ -54,17 +73,22 @@ export async function computeAccountBalances(
     if (tx.status === "cancelled") continue;
     const amt = Number(tx.amount) || 0;
     const isCompleted = !tx.status || tx.status === "completed";
+    const isPending = tx.status === "pending";
+    // Only pending transactions whose date is within the current month count
+    // towards balance_predicted. Beyond that, they're forecast noise.
+    const isPendingThisMonth = isPending && (tx.date ?? "") <= endOfMonth;
+    const counts_for_predicted = isCompleted || isPendingThisMonth;
 
     if (tx.account_id) {
       const acc = ensure(tx.account_id);
       const delta =
         tx.type === "income" ? amt : tx.type === "expense" || tx.type === "transfer" ? -amt : 0;
-      acc.balance_predicted += delta;
+      if (counts_for_predicted) acc.balance_predicted += delta;
       if (isCompleted) acc.balance += delta;
     }
     if (tx.transfer_to_account_id && tx.type === "transfer") {
       const acc = ensure(tx.transfer_to_account_id);
-      acc.balance_predicted += amt;
+      if (counts_for_predicted) acc.balance_predicted += amt;
       if (isCompleted) acc.balance += amt;
     }
   }

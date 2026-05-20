@@ -50,6 +50,17 @@ export interface ImportResult {
   errors: string[];
   categoryMapping: Record<string, string>;
   accountsFound: string[];
+  /**
+   * Opening balances detected in the file (e.g. CPC's "OPENING BALANCE" line,
+   * Moza Banco's "Saldo de Abertura" header). Used to calibrate the account
+   * balance automatically on import without the user computing differences.
+   */
+  openingBalances?: Array<{
+    accountName: string;
+    amount: number;
+    /** ISO date YYYY-MM-DD — the date the opening balance refers to. */
+    date: string;
+  }>;
   dateRange: { from: string; to: string } | null;
   summary: {
     totalIncome: number;

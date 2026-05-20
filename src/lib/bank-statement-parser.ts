@@ -171,14 +171,35 @@ export function parseCPCStatement(csvContent: string): ImportResult {
   let totalTransfers = 0;
   let minDate = "";
   let maxDate = "";
+  let openingBalance: { amount: number; date: string } | null = null;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!;
 
-    // Skip special rows
-    if (/^OPENING BALANCE|^CLOSING BALANCE/i.test(line)) {
+    // Extract OPENING BALANCE before skipping. CPC format examples:
+    //   "01 JAN 2026,01 JAN 2026,,OPENING BALANCE,,,1234567.89,..."
+    //   "OPENING BALANCE,,,,,,1234567.89"
+    if (/OPENING BALANCE/i.test(line)) {
+      const fields = parseCSVLine(line);
+      // The balance column on CPC sits in position 6 (0-indexed) — same as
+      // Balance for normal rows. Fall back to the last numeric column.
+      const parsed = (() => {
+        const byIdx = parseCPCAmount(fields[6] ?? "");
+        if (byIdx) return byIdx;
+        for (let j = fields.length - 1; j >= 0; j--) {
+          const n = parseCPCAmount(fields[j] ?? "");
+          if (n) return n;
+        }
+        return 0;
+      })();
+      const candidateDate = parseCPCDate(fields[0] ?? "");
+      const isoDate = /^\d{4}-\d{2}-\d{2}$/.test(candidateDate)
+        ? candidateDate
+        : new Date().toISOString().split("T")[0]!;
+      if (parsed !== 0) openingBalance = { amount: parsed, date: isoDate };
       continue;
     }
+    if (/^CLOSING BALANCE/i.test(line)) continue;
 
     // Parse CSV line (CPC uses comma-separated with possible quoted fields)
     const fields = parseCSVLine(line);
@@ -283,6 +304,9 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     errors,
     categoryMapping: {},
     accountsFound: Array.from(accountsSet),
+    openingBalances: openingBalance
+      ? [{ accountName: "CPC", amount: openingBalance.amount, date: openingBalance.date }]
+      : [],
     dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
     summary: { totalIncome, totalExpenses, totalTransfers, categoryCounts },
   };
@@ -403,6 +427,26 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
   // Extract account info from metadata
   const accountNumber = lines[1]?.replace(/;.*$/, "").trim() ?? "Moza Banco";
 
+  // Extract "Saldo de Abertura" amount from the header lines. Moza Banco
+  // format: "Saldo de Abertura: ;170896,25" (semi-colon separated).
+  let openingAmount: number | null = null;
+  let openingDate: string | null = null;
+  for (let i = 0; i < headerIndex; i++) {
+    const ln = lines[i]!;
+    if (/saldo\s*de\s*abertura/i.test(ln)) {
+      const parts = ln.split(";").map((p) => p.trim().replace(/^"|"$/g, ""));
+      // The amount is the first non-label numeric token after "Saldo de Abertura"
+      for (const p of parts) {
+        if (/saldo|abertura/i.test(p)) continue;
+        const n = parseMozaAmount(p);
+        if (n !== 0) {
+          openingAmount = n;
+          break;
+        }
+      }
+    }
+  }
+
   const accountsSet = new Set<string>(["Moza Banco"]);
   const categoryCounts: Record<string, number> = {};
   let totalIncome = 0;
@@ -505,6 +549,12 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
     });
   }
 
+  // For Moza, the opening balance refers to the date right before the
+  // earliest transaction in the file
+  if (openingAmount !== null && minDate) {
+    openingDate = minDate;
+  }
+
   return {
     success: imported.length > 0,
     total: lines.length - headerIndex - 1,
@@ -513,6 +563,10 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
     errors,
     categoryMapping: {},
     accountsFound: Array.from(accountsSet),
+    openingBalances:
+      openingAmount !== null && openingDate
+        ? [{ accountName: "Moza Banco", amount: openingAmount, date: openingDate }]
+        : [],
     dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
     summary: { totalIncome, totalExpenses, totalTransfers, categoryCounts },
   };

@@ -901,7 +901,12 @@ function ImportPreview({
       const response = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transactions }),
+        body: JSON.stringify({
+          transactions,
+          // Calibra automaticamente os saldos das contas a partir do
+          // "Saldo de Abertura" lido do extracto bancário (CPC, Moza)
+          openingBalances: result.openingBalances,
+        }),
       });
 
       const data = await response.json();
