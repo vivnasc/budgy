@@ -120,8 +120,8 @@ export function Sidebar() {
           <NavSection label="Mais" items={MAIS_ITEMS} pathname={pathname} />
         </nav>
 
-        {/* Bottom — Settings */}
-        <div className="border-t border-white/5 px-3 py-3">
+        {/* Bottom — Settings + build version */}
+        <div className="border-t border-white/5 px-3 py-3 space-y-2">
           <Link
             href="/painel"
             className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500 hover:text-white hover:bg-white/5 transition-colors"
@@ -129,6 +129,9 @@ export function Sidebar() {
             <Settings className="h-[18px] w-[18px]" />
             Definições
           </Link>
+          <p className="px-3 text-[10px] text-gray-600 font-mono select-all">
+            build {process.env.NEXT_PUBLIC_BUILD_COMMIT ?? "dev"}
+          </p>
         </div>
       </div>
 
