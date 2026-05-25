@@ -105,6 +105,9 @@ export async function POST() {
     };
 
     let updated = 0;
+    const updatedBy = new Map<string, number>();
+    const stillOutros: { id: string; description: string; type: string }[] = [];
+
     for (const tx of transactions) {
       // Transfers don't get categories
       if (tx.type === "transfer") continue;
@@ -119,24 +122,34 @@ export async function POST() {
       const catType: "income" | "expense" = tx.type === "income" ? "income" : "expense";
 
       let nextCategoryId: string | undefined;
+      let assignedName: string | undefined;
 
-      if (result.category && result.category !== "Outros" && result.category !== "Outro Rendimento") {
-        if (result.confidence >= 0.5) {
-          // Strong match — overrides whatever is set
-          nextCategoryId = await ensureCategory(result.category, catType);
-        } else if (result.confidence >= 0.3 && isUncategorised) {
-          // Weak match — only fill in if the row had nothing yet
-          nextCategoryId = await ensureCategory(result.category, catType);
-        }
+      if (
+        isUncategorised &&
+        result.category &&
+        result.category !== "Outros" &&
+        result.category !== "Outro Rendimento" &&
+        result.confidence >= 0.3
+      ) {
+        nextCategoryId = await ensureCategory(result.category, catType);
+        assignedName = result.category;
       }
 
       // Fall back to learning from siblings with the same description
       if (!nextCategoryId && isUncategorised) {
         const learned = learnedCategoryFor(desc);
-        if (learned && learned !== current?.id) nextCategoryId = learned;
+        if (learned && learned !== current?.id) {
+          nextCategoryId = learned;
+        }
       }
 
-      if (!nextCategoryId || nextCategoryId === current?.id) continue;
+      if (!nextCategoryId || nextCategoryId === current?.id) {
+        // Track what couldn't be categorised so we can show samples
+        if (isUncategorised && stillOutros.length < 20) {
+          stillOutros.push({ id: tx.id, description: desc, type: tx.type });
+        }
+        continue;
+      }
 
       const { error: updErr } = await supabase
         .schema("money_schema")
@@ -146,6 +159,9 @@ export async function POST() {
         .eq("user_id", user.id);
       if (!updErr) {
         updated++;
+        if (assignedName) {
+          updatedBy.set(assignedName, (updatedBy.get(assignedName) ?? 0) + 1);
+        }
         // Update our in-memory description map so subsequent uncategorised
         // rows benefit immediately
         const key = desc.toLowerCase().trim();
@@ -158,7 +174,13 @@ export async function POST() {
       }
     }
 
-    return NextResponse.json({ success: true, updated, total: transactions.length });
+    return NextResponse.json({
+      success: true,
+      updated,
+      total: transactions.length,
+      updatedBy: Object.fromEntries(updatedBy),
+      stillOutros,
+    });
   } catch {
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
   }

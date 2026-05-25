@@ -9,12 +9,26 @@ if (process.env.NODE_ENV === "development") {
   initOpenNextCloudflareForDev();
 }
 
+// Expose the commit SHA + build timestamp to the client so we can show on
+// the UI exactly which build is live. Cloudflare Workers Builds and Vercel
+// both inject GIT_COMMIT_SHA / CF_PAGES_COMMIT_SHA / VERCEL_GIT_COMMIT_SHA.
+const COMMIT_SHA =
+  process.env.CF_PAGES_COMMIT_SHA ||
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.GIT_COMMIT_SHA ||
+  "dev";
+const BUILD_TIME = new Date().toISOString();
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Cloudflare Workers don't run the Next.js Image Optimizer by default.
   // Skip optimization so <Image> works there. (No regression on Vercel.)
   images: {
     unoptimized: true,
+  },
+  env: {
+    NEXT_PUBLIC_BUILD_COMMIT: COMMIT_SHA.slice(0, 7),
+    NEXT_PUBLIC_BUILD_TIME: BUILD_TIME,
   },
 
   async headers() {

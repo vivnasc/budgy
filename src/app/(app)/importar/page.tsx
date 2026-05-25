@@ -668,17 +668,14 @@ function PendingTransactionCard({
 
 function ImportTab() {
   const [step, setStep] = useState<ImportStep>("upload");
-  const [selectedFormat, setSelectedFormat] = useState<BankFormat>("auto");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const processFile = useCallback(async (file: File) => {
     setImporting(true);
     setError(null);
 
@@ -687,10 +684,9 @@ function ImportTab() {
       const isExcel = filename.endsWith(".xlsx") || filename.endsWith(".xls");
 
       if (isExcel) {
-        // Use FormData for Excel files
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("format", selectedFormat);
+        formData.append("format", "auto");
 
         const response = await fetch("/api/import", {
           method: "POST",
@@ -700,25 +696,24 @@ function ImportTab() {
         const data = await response.json();
         if (data.success) {
           setImportResult(data);
-          setDetectedFormat(data.detectedFormat || selectedFormat);
+          setDetectedFormat(data.detectedFormat || "auto");
           setStep("preview");
         } else {
-          setError(data.error || "Erro ao processar ficheiro Excel");
+          setError(data.error || "Erro ao processar ficheiro");
         }
       } else {
-        // CSV/text files
         const csvContent = await file.text();
 
         const response = await fetch("/api/import", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ csvContent, format: selectedFormat, filename: file.name }),
+          body: JSON.stringify({ csvContent, format: "auto", filename: file.name }),
         });
 
         const data = await response.json();
         if (data.success) {
           setImportResult(data);
-          setDetectedFormat(data.detectedFormat || selectedFormat);
+          setDetectedFormat(data.detectedFormat || "auto");
           setStep("preview");
         } else {
           setError(data.error || "Erro ao processar ficheiro");
@@ -728,132 +723,81 @@ function ImportTab() {
       setError("Erro ao ler ficheiro. Verifica se o formato está correcto.");
     } finally {
       setImporting(false);
-      // Reset file input
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, [selectedFormat]);
+  }, []);
 
-  const acceptedFileTypes = selectedFormat === "auto"
-    ? ".csv,.xlsx,.xls,.txt"
-    : SUPPORTED_BANK_FORMATS.find((b) => b.id === selectedFormat)?.fileTypes.join(",") || ".csv,.xlsx";
+  const handleFileInput = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) processFile(file);
+  }, [processFile]);
+
+  const handleDrop = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    setDragOver(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) processFile(file);
+  }, [processFile]);
 
   return (
     <div className="space-y-6">
       {step === "upload" && (
         <>
-          {/* Instructions */}
-          <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
-            <div className="flex items-start gap-3">
-              <Upload className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h3 className="text-sm font-bold text-blue-900">Importar Extrato Bancário</h3>
-                <p className="text-xs text-blue-700 mt-1 leading-relaxed">
-                  Carrega o extrato do teu banco ou a exportação de outra app.
-                  O BUDGY deteta o formato, organiza as categorias e importa tudo automaticamente.
+          {/* Drag & Drop Zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`relative cursor-pointer border-2 border-dashed rounded-2xl p-8 text-center transition-all ${
+              dragOver
+                ? "border-emerald-400 bg-emerald-50/50 scale-[1.01]"
+                : "border-gray-200 bg-gray-50/50 hover:border-emerald-300 hover:bg-emerald-50/30"
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls,.txt"
+              onChange={handleFileInput}
+              className="hidden"
+            />
+
+            {importing ? (
+              <div className="py-4">
+                <Loader2 className="w-10 h-10 text-emerald-500 mx-auto mb-3 animate-spin" />
+                <p className="text-sm font-semibold text-gray-700">A processar...</p>
+                <p className="text-xs text-gray-400 mt-1">O BUDGY está a ler e categorizar</p>
+              </div>
+            ) : (
+              <div className="py-4">
+                <Upload className={`w-10 h-10 mx-auto mb-3 ${dragOver ? "text-emerald-500" : "text-gray-400"}`} />
+                <p className="text-sm font-semibold text-gray-700">
+                  Arrasta aqui o ficheiro do banco
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  CSV ou Excel — CPC, Moza Banco, Standard Bank, Mobills
+                </p>
+                <p className="text-xs text-gray-300 mt-0.5">
+                  ou clica para escolher
                 </p>
               </div>
-            </div>
-          </div>
-
-          {/* Bank Format Selection */}
-          <div>
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              Formato do ficheiro
-            </h3>
-            <div className="grid grid-cols-2 gap-2">
-              {SUPPORTED_BANK_FORMATS.map((bank) => (
-                <button
-                  key={bank.id}
-                  onClick={() => setSelectedFormat(bank.id)}
-                  className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
-                    selectedFormat === bank.id
-                      ? "border-emerald-300 bg-emerald-50 ring-1 ring-emerald-200"
-                      : "border-gray-100 bg-white hover:border-gray-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    {bank.id === "auto" ? (
-                      <Sparkles className={`w-4 h-4 ${selectedFormat === bank.id ? "text-emerald-600" : "text-gray-400"}`} />
-                    ) : (
-                      <FileSpreadsheet className={`w-4 h-4 ${selectedFormat === bank.id ? "text-emerald-600" : "text-gray-400"}`} />
-                    )}
-                    <span className={`text-sm font-semibold ${selectedFormat === bank.id ? "text-emerald-900" : "text-gray-700"}`}>
-                      {bank.name}
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-gray-400">
-                    {bank.description}
-                  </span>
-                  <span className="text-[10px] text-gray-300 mt-0.5">
-                    {bank.fileTypes.join(", ")}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Upload Button */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={acceptedFileTypes}
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importing}
-            className="w-full flex items-center justify-center gap-3 bg-emerald-500 text-white font-semibold py-4 rounded-2xl hover:bg-emerald-600 disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/20"
-          >
-            {importing ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                A processar...
-              </>
-            ) : (
-              <>
-                <Upload className="w-5 h-5" />
-                Carregar ficheiro
-              </>
             )}
-          </button>
+          </div>
 
           {error && (
-            <div className="flex items-start gap-3 bg-red-50 rounded-2xl p-4 border border-red-100">
-              <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-red-700">{error}</p>
+            <div className="bg-red-50 rounded-2xl p-4 border border-red-100">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-bold text-red-900">Erro</h3>
+                  <p className="text-xs text-red-700 mt-1">{error}</p>
+                </div>
+              </div>
             </div>
           )}
-
-          {/* Help Section */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-4">
-            <h3 className="text-sm font-bold text-gray-900 mb-3">
-              Como obter o extrato
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <span className="text-base">🏦</span>
-                <span className="text-xs text-gray-600">
-                  Internet Banking do teu banco → Extractos → Exportar CSV ou Excel
-                </span>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="text-base">📱</span>
-                <span className="text-xs text-gray-600">
-                  App do banco → Movimentos → Download / Exportar
-                </span>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="text-base">📊</span>
-                <span className="text-xs text-gray-600">
-                  Outra app → Definições → Exportar dados (Excel)
-                </span>
-              </div>
-            </div>
-          </div>
         </>
       )}
-
       {step === "preview" && importResult && (
         <ImportPreview
           result={importResult}

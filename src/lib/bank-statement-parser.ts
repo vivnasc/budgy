@@ -65,32 +65,36 @@ export const SUPPORTED_BANK_FORMATS: BankInfo[] = [
 // ─── Auto-Detection ─────────────────────────────────────────────────────────
 
 export function detectBankFormat(content: string, filename?: string): BankFormat {
-  // CPC: starts with "Transaction Date,Value Date,Transaction Ref."
-  if (content.includes("Transaction Date,Value Date,Transaction Ref.")) {
+  const lowerFilename = filename?.toLowerCase() ?? "";
+
+  // Filename hints take priority — the user labelled the file already
+  if (lowerFilename.includes("cpc")) return "cpc";
+  if (lowerFilename.includes("moza")) return "moza";
+  if (lowerFilename.includes("standardbank") || lowerFilename.includes("standard bank")) {
+    return "standard-bank";
+  }
+  if (lowerFilename.includes("mobills")) return "mobills";
+
+  // CPC: English headers with Transaction Date + Debit/Credit columns.
+  // Match flexibly — exact header punctuation varies between exports.
+  const looksLikeCPC =
+    /Transaction\s+Date/i.test(content) &&
+    /Debit/i.test(content) &&
+    /Credit/i.test(content);
+  if (looksLikeCPC) return "cpc";
+  // Some CPC exports replace "OPENING BALANCE" anywhere in the file
+  if (/OPENING BALANCE/i.test(content) && !/Saldo de Abertura/i.test(content)) {
     return "cpc";
   }
 
-  // Moza Banco: starts with BOM + "sep=;" or has "Saldo de Abertura"
-  if (content.includes("sep=;") || content.includes("Saldo de Abertura")) {
+  // Moza Banco: BOM + "sep=;" or "Saldo de Abertura" header
+  if (content.includes("sep=;") || /Saldo de Abertura/i.test(content)) {
     return "moza";
   }
 
-  // Standard Bank: typically Excel
-  if (filename?.toLowerCase().includes("standardbank") || filename?.toLowerCase().includes("standard bank")) {
-    return "standard-bank";
-  }
-
-  // Mobills: has their typical headers
+  // Mobills: typical Portuguese/English category headers
   if (/descri[çc][aã]o.*categori/i.test(content) || /description.*category/i.test(content)) {
     return "mobills";
-  }
-
-  // Check filename hints
-  if (filename) {
-    const lower = filename.toLowerCase();
-    if (lower.includes("cpc")) return "cpc";
-    if (lower.includes("moza")) return "moza";
-    if (lower.includes("mobills")) return "mobills";
   }
 
   return "mobills"; // default fallback
@@ -360,6 +364,31 @@ function extractMozaDescription(raw: string): string {
 
   // Clean levantamento prefix: "Levantamento 402546******2463 Mv80 PRACA"
   desc = desc.replace(/^Levantamento\s+\d+\*+\d+\s+Mv\d*\s*/i, "Levantamento ");
+
+  // Clean "Purchase MERCHANT 9635985 ENET- Suspensa UOT POS-VISA" patterns.
+  // The merchant name sits between "Purchase" and the 6-7 digit terminal id.
+  // Examples:
+  //   "Purchase NETFLIXCOM 40872 9635985 ENET- Suspensa UOT POS-VISA"
+  //   "Purchase ANTARIO SUPERMER 9635985 ENET Suspensa UOT-POS REDE"
+  if (/^Purchase\s+/i.test(desc)) {
+    desc = desc
+      .replace(/^Purchase\s+/i, "")
+      // Strip terminal id + ENET POS noise from the end
+      .replace(/\s+\d{6,}\s*ENET[\s-]*Suspens[ao]\s*UOT[\s-]*POS[\s-]*(?:REDE|VISA).*$/i, "")
+      .replace(/\s+\d{6,}\s*ENET.*$/i, "")
+      .trim();
+  }
+
+  // Clean "Compra Recarga Credelec EDM Susp. CREDELEC Netplus" patterns
+  // (utility recharges via Netplus)
+  if (/Recarga\s+Credelec|EDM\s+Susp|CREDELEC/i.test(desc)) {
+    desc = "Recarga Credelec EDM";
+  }
+
+  // Strip generic transfer-banking suffixes
+  desc = desc.replace(/\s*ENET[\s-]*Suspens[ao]\s*UOT[\s-]*POS[\s-]*(?:REDE|VISA)\s*$/i, "");
+  desc = desc.replace(/\s*ENET\s+UOT\s+Transferencias\s+Recebidas\s*$/i, "");
+  desc = desc.trim();
 
   // Clean M-Pesa transfer format: "TRF_Cart_Dig_Mpesa846313848"
   if (/^TRF_Cart_Dig_Mpesa/i.test(desc)) {
