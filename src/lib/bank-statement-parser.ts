@@ -196,11 +196,9 @@ export function parseCPCStatement(csvContent: string): ImportResult {
         }
         return 0;
       })();
-      const candidateDate = parseCPCDate(fields[0] ?? "");
-      const isoDate = /^\d{4}-\d{2}-\d{2}$/.test(candidateDate)
-        ? candidateDate
-        : new Date().toISOString().split("T")[0]!;
-      if (parsed !== 0) openingBalance = { amount: parsed, date: isoDate };
+      // Date is set to minDate (first real tx) AFTER the loop finishes.
+      // The OPENING BALANCE line has no usable date.
+      if (parsed !== 0) openingBalance = { amount: parsed, date: "" };
       continue;
     }
     if (/^CLOSING BALANCE/i.test(line)) continue;
@@ -309,7 +307,7 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     categoryMapping: {},
     accountsFound: Array.from(accountsSet),
     openingBalances: openingBalance
-      ? [{ accountName: "CPC", amount: openingBalance.amount, date: openingBalance.date }]
+      ? [{ accountName: "CPC", amount: openingBalance.amount, date: openingBalance.date || minDate || new Date().toISOString().split("T")[0]! }]
       : [],
     dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
     summary: { totalIncome, totalExpenses, totalTransfers, categoryCounts },
