@@ -837,9 +837,34 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
       continue;
     }
 
-    const description = (row.description ?? "Standard Bank").trim();
+    let description = (row.description ?? "Standard Bank").trim();
     let type: "income" | "expense" | "transfer" = "expense";
     if (credit > 0 || singleAmount > 0) type = "income";
+
+    // Clean Standard Bank descriptions — same POS/ENET noise as Moza Banco
+    // "Purchase FARMACIA FELIZ L 9635985  ENET Suspensa UOT-POS REDE" → "FARMACIA FELIZ L"
+    // "Lvto. C. Auto. Av Angola 9635985  ATM SB - ..." → "Levantamento"
+    // "Transferencia IVA ..." → "Transferência ..."
+    if (/^Purchase\s+/i.test(description)) {
+      description = description
+        .replace(/^Purchase\s+/i, "")
+        .replace(/\s+\d{6,}.*$/i, "")
+        .trim();
+    } else if (/^Lvto\.\s*C\.\s*Auto\./i.test(description)) {
+      type = "transfer";
+      description = "Levantamento ATM";
+    } else if (/^Transferencia\b/i.test(description)) {
+      type = "income";
+      description = description.replace(/\s+\d{6,}.*$/i, "").replace(/\s+ENET.*$/i, "").trim();
+    } else if (/^Refund\b/i.test(description)) {
+      type = "income";
+      description = description.replace(/\s+\d{6,}.*$/i, "").trim();
+    }
+    // Strip trailing card number + ENET/POS noise generically
+    description = description
+      .replace(/\s+\d{6,}\s+(?:ENET|ATM|POS).*$/i, "")
+      .replace(/\s+\d{6,}\s+\w+\s+\w+.*$/i, "")
+      .trim();
 
     const categoryResult = autoCategorize(description, type, amount);
 
