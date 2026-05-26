@@ -116,7 +116,31 @@ export async function POST() {
       if (!desc) continue;
 
       const current = currentCategory(tx.categories);
-      const isUncategorised = !tx.category_id || (current && current.name === "Outros");
+      const isUncategorised = !tx.category_id || (current && current.name === "Outros")
+        || (current && current.name === "Compras" && !tx.category_id);
+      // Also recategorize anything stuck in generic "Compras" from heuristic fallback
+      const isGenericCompras = current && current.name === "Compras";
+      const shouldRecategorize = isUncategorised || isGenericCompras;
+
+      // "Reajuste de saldo" entries are Mobills balance adjustments — not real
+      // spending. Always reclassify them as "Ajuste de Saldo".
+      if (/reajuste de saldo/i.test(desc)) {
+        const catType = tx.type === "income" ? "income" : "expense";
+        const ajusteId = await ensureCategory("Ajuste de Saldo", catType);
+        if (ajusteId && ajusteId !== current?.id) {
+          const { error: updErr } = await supabase
+            .schema("money_schema")
+            .from("transactions")
+            .update({ category_id: ajusteId })
+            .eq("id", tx.id)
+            .eq("user_id", user.id);
+          if (!updErr) {
+            updated++;
+            updatedBy.set("Ajuste de Saldo", (updatedBy.get("Ajuste de Saldo") ?? 0) + 1);
+          }
+        }
+        continue;
+      }
 
       const result = autoCategorize(desc, tx.type, Number(tx.amount));
       const catType: "income" | "expense" = tx.type === "income" ? "income" : "expense";
@@ -125,18 +149,20 @@ export async function POST() {
       let assignedName: string | undefined;
 
       if (
-        isUncategorised &&
+        shouldRecategorize &&
         result.category &&
         result.category !== "Outros" &&
         result.category !== "Outro Rendimento" &&
-        result.confidence >= 0.3
+        result.confidence >= 0.3 &&
+        // Only upgrade from Compras if the new category is more specific
+        (!isGenericCompras || (result.category !== "Compras" && result.confidence >= 0.5))
       ) {
         nextCategoryId = await ensureCategory(result.category, catType);
         assignedName = result.category;
       }
 
       // Fall back to learning from siblings with the same description
-      if (!nextCategoryId && isUncategorised) {
+      if (!nextCategoryId && shouldRecategorize) {
         const learned = learnedCategoryFor(desc);
         if (learned && learned !== current?.id) {
           nextCategoryId = learned;

@@ -435,8 +435,51 @@ const SYSTEM_RULES: CategorizationRule[] = [
   { pattern: "megas", isRegex: false, category: "Comunicação", confidence: 0.9, confirmCount: 0, source: "system" },
   { pattern: "recarga", isRegex: false, category: "Comunicação", confidence: 0.9, confirmCount: 0, source: "system" },
 
-  // ── Viagens ──
-  { pattern: "viagens despesas", isRegex: false, category: "Viagens", confidence: 0.95, confirmCount: 0, source: "system" },
+  // ── Viagens (holidays, Durban trips, Airbnb, caução) ──
+  { pattern: "holidays", isRegex: false, category: "Viagens", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "holiday", isRegex: false, category: "Viagens", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "durban", isRegex: false, category: "Viagens", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "airbnb", isRegex: false, category: "Viagens", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "caução", isRegex: false, category: "Viagens", confidence: 0.85, confirmCount: 0, source: "system" },
+  { pattern: "caucao", isRegex: false, category: "Viagens", confidence: 0.85, confirmCount: 0, source: "system" },
+  { pattern: "zimbali", isRegex: false, category: "Viagens", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "randes viagem", isRegex: false, category: "Viagens", confidence: 0.95, confirmCount: 0, source: "system" },
+
+  // ── Subscrições digitais (typos incluídos — Vivianne escreve rápido) ──
+  { pattern: "distrokid", isRegex: false, category: "Subscrições", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "diatrokid", isRegex: false, category: "Subscrições", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "shotstack", isRegex: false, category: "Subscrições", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "midjourney", isRegex: false, category: "Subscrições", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "midjouney", isRegex: false, category: "Subscrições", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "fal.ia", isRegex: false, category: "Subscrições", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "digital apps", isRegex: false, category: "Subscrições", confidence: 0.9, confirmCount: 0, source: "system" },
+
+  // ── Saúde (typos, English) ──
+  { pattern: "farmancia", isRegex: false, category: "Saúde", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "health", isRegex: false, category: "Saúde", confidence: 0.9, confirmCount: 0, source: "system" },
+
+  // ── Educação (mensalidades escolares) ──
+  { pattern: "pikiniko", isRegex: false, category: "Educação", confidence: 0.95, confirmCount: 0, source: "system" },
+  { pattern: "mensalidade", isRegex: false, category: "Educação", confidence: 0.8, confirmCount: 0, source: "system" },
+
+  // ── Automóvel / Transporte ──
+  { pattern: "matabois", isRegex: false, category: "Transporte", confidence: 0.9, confirmCount: 0, source: "system" },
+  { pattern: "pneus", isRegex: false, category: "Transporte", confidence: 0.9, confirmCount: 0, source: "system" },
+
+  // ── Beleza (Shirley salão) ──
+  { pattern: "shirley", isRegex: false, category: "Beleza & Cuidados", confidence: 0.9, confirmCount: 0, source: "system" },
+
+  // ── Casa (contribuição prédio, portão) ──
+  { pattern: "contribuição", isRegex: false, category: "Casa", confidence: 0.8, confirmCount: 0, source: "system" },
+  { pattern: "contribuicao", isRegex: false, category: "Casa", confidence: 0.8, confirmCount: 0, source: "system" },
+  { pattern: "portao", isRegex: false, category: "Casa", confidence: 0.8, confirmCount: 0, source: "system" },
+  { pattern: "portão", isRegex: false, category: "Casa", confidence: 0.8, confirmCount: 0, source: "system" },
+
+  // ── Alimentação (Komati = compras em SA, mas é maioritariamente rancho) ──
+  { pattern: "komati", isRegex: false, category: "Alimentação", confidence: 0.85, confirmCount: 0, source: "system" },
+
+  // ── Família ──
+  { pattern: "ticy", isRegex: false, category: "Família", confidence: 0.85, confirmCount: 0, source: "system" },
   { pattern: "alfandegas", isRegex: false, category: "Viagens", confidence: 0.95, confirmCount: 0, source: "system" },
   { pattern: "alfândegas", isRegex: false, category: "Viagens", confidence: 0.95, confirmCount: 0, source: "system" },
   { pattern: "aramex", isRegex: false, category: "Viagens", confidence: 0.9, confirmCount: 0, source: "system" },
