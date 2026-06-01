@@ -137,38 +137,37 @@ export async function POST(request: Request) {
 
       const duplicates = transactions.length - unique.length;
 
-      if (unique.length === 0) {
-        return NextResponse.json({
-          success: true,
-          count: 0,
-          duplicates,
-          transactions: [],
-          message: `${duplicates} transações já existem. Nada importado.`,
-        });
-      }
+      // Insert only the new rows. NOTE: we do NOT bail out early when
+      // everything is a duplicate — the opening-balance calibration below must
+      // still run so that re-importing a statement can correct an account's
+      // balance even when no new transactions are added.
+      let data: unknown[] | null = [];
+      if (unique.length > 0) {
+        const res = await supabase
+          .schema("money_schema")
+          .from("transactions")
+          .insert(unique)
+          .select();
 
-      const { data, error } = await supabase
-        .schema("money_schema")
-        .from("transactions")
-        .insert(unique)
-        .select();
+        if (res.error) {
+          return NextResponse.json({ error: res.error.message }, { status: 500 });
+        }
+        data = res.data;
 
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        // Recalculate balances for all accounts touched by the inserted rows
+        const touched = new Set<string>();
+        for (const tx of unique) {
+          if (tx.account_id) touched.add(tx.account_id);
+          if (tx.transfer_to_account_id) touched.add(tx.transfer_to_account_id);
+        }
+        await persistAccountBalances(supabase, user.id, Array.from(touched));
       }
-
-      // Recalculate balances for all accounts touched by the inserted rows
-      const touched = new Set<string>();
-      for (const tx of unique) {
-        if (tx.account_id) touched.add(tx.account_id);
-        if (tx.transfer_to_account_id) touched.add(tx.transfer_to_account_id);
-      }
-      await persistAccountBalances(supabase, user.id, Array.from(touched));
 
       // Automatic calibration: if the import detected an opening balance in
       // the bank statement (CPC's "OPENING BALANCE", Moza's "Saldo de
-      // Abertura"), create the Saldo de Abertura tx for that account so the
-      // balance matches reality without any manual computation.
+      // Abertura", Standard Bank's running balance), create the Saldo de
+      // Abertura tx for that account so the balance matches reality without
+      // any manual computation. This runs even on an all-duplicate re-import.
       const opens = (body.openingBalances || []) as Array<{
         accountName: string;
         amount: number;
@@ -183,15 +182,21 @@ export async function POST(request: Request) {
         calibrated.push(ob.accountName);
       }
 
+      const insertedCount = Array.isArray(data) ? data.length : 0;
       return NextResponse.json({
         success: true,
-        count: data?.length || 0,
+        count: insertedCount,
         duplicates,
         transactions: data,
         calibratedAccounts: calibrated,
-        message: duplicates > 0
-          ? `${data?.length} importadas, ${duplicates} duplicadas ignoradas.`
-          : undefined,
+        message:
+          unique.length === 0
+            ? calibrated.length > 0
+              ? `${duplicates} já existiam — saldo recalibrado (${calibrated.join(", ")}).`
+              : `${duplicates} transações já existem. Nada importado.`
+            : duplicates > 0
+            ? `${insertedCount} importadas, ${duplicates} duplicadas ignoradas.`
+            : undefined,
       });
     }
 

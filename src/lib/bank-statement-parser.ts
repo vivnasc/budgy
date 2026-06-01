@@ -300,6 +300,16 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     });
   }
 
+  // The CPC "OPENING BALANCE" line carries no usable date of its own — it is
+  // the balance that existed right BEFORE the earliest transaction in the
+  // file. Anchor it to minDate so calibration sums zero movements before it
+  // (same convention as Moza). Without this the date fell back to "today",
+  // which made applyOpeningBalance treat the opening figure as the CURRENT
+  // balance and wrongly collapse the account total to the opening amount.
+  if (openingBalance && minDate) {
+    openingBalance.date = minDate;
+  }
+
   return {
     success: imported.length > 0,
     total: lines.length - 1,
@@ -811,6 +821,17 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
   let totalTransfers = 0;
   let minDate = "";
   let maxDate = "";
+  // Standard Bank carries no explicit "opening balance" header, but it does
+  // have a running "Saldo" column. We capture the running balance of the
+  // chronologically newest row (the closing balance) and back-derive the
+  // opening so the import can calibrate the account without any manual step.
+  // Bank exports are ordered consistently (either newest- or oldest-first);
+  // we detect which by comparing the first and last rows' dates, which avoids
+  // the same-date ambiguity of an intra-loop max.
+  let firstBalance: number | null = null;
+  let firstBalanceDate = "";
+  let lastBalance: number | null = null;
+  let lastBalanceDate = "";
 
   for (let i = headerIndex + 1; i < lines.length; i++) {
     const line = lines[i]!;
@@ -825,6 +846,17 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
     if (!date) {
       skipped++;
       continue;
+    }
+
+    // Track the running balance of the first and last rows in file order.
+    if (row.balance) {
+      const bal = parseFlexibleAmount(row.balance);
+      if (firstBalance === null) {
+        firstBalance = bal;
+        firstBalanceDate = date;
+      }
+      lastBalance = bal;
+      lastBalanceDate = date;
     }
 
     const debit = parseFlexibleAmount(row.debit ?? "");
@@ -890,6 +922,24 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
     });
   }
 
+  // Pick the closing balance as the running balance of the chronologically
+  // newest row. Detect file order from the first vs last row's dates.
+  let closingBalance: number | null = null;
+  if (firstBalance !== null && lastBalance !== null) {
+    closingBalance = firstBalanceDate >= lastBalanceDate ? firstBalance : lastBalance;
+  }
+
+  // Back-derive the opening balance from the closing balance minus the net of
+  // all movements in the file, anchored to the earliest transaction date.
+  // applyOpeningBalance then sums zero movements before it (first import) and
+  // calibrates the account to the real closing balance.
+  let openingBalances: Array<{ accountName: string; amount: number; date: string }> = [];
+  if (closingBalance !== null && minDate) {
+    const netSigned = totalIncome - totalExpenses - totalTransfers;
+    const openingAmount = closingBalance - netSigned;
+    openingBalances = [{ accountName: "Standard Bank", amount: openingAmount, date: minDate }];
+  }
+
   return {
     success: imported.length > 0,
     total: lines.length - headerIndex - 1,
@@ -898,6 +948,7 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
     errors,
     categoryMapping: {},
     accountsFound: Array.from(accountsSet),
+    openingBalances,
     dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
     summary: { totalIncome, totalExpenses, totalTransfers, categoryCounts },
   };

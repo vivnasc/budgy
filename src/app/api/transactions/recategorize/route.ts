@@ -117,6 +117,13 @@ export async function POST() {
 
       const current = currentCategory(tx.categories);
       const isUncategorised = !tx.category_id || (current && current.name === "Outros");
+      // Rows that landed in the generic "Compras" fallback (confidence 0.35)
+      // are reconsidered: if a strong rule now points to a MORE specific
+      // category, we upgrade them. This is how newly-added merchant rules
+      // (durban, distrokids, holidays, …) reach the bulk of expenses that
+      // were previously dumped into "Compras". Genuine "Compras" merchants
+      // (shein, woolworths, …) re-resolve to "Compras" → no churn.
+      const isGenericCompras = !!current && current.name === "Compras";
 
       const result = autoCategorize(desc, tx.type, Number(tx.amount));
       const catType: "income" | "expense" = tx.type === "income" ? "income" : "expense";
@@ -130,6 +137,16 @@ export async function POST() {
         result.category !== "Outros" &&
         result.category !== "Outro Rendimento" &&
         result.confidence >= 0.3
+      ) {
+        nextCategoryId = await ensureCategory(result.category, catType);
+        assignedName = result.category;
+      } else if (
+        isGenericCompras &&
+        result.category &&
+        result.category !== "Compras" &&
+        result.category !== "Outros" &&
+        result.category !== "Outro Rendimento" &&
+        result.confidence >= 0.7
       ) {
         nextCategoryId = await ensureCategory(result.category, catType);
         assignedName = result.category;
