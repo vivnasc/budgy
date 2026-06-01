@@ -300,6 +300,16 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     });
   }
 
+  // The CPC "OPENING BALANCE" line carries no usable date of its own — it is
+  // the balance that existed right BEFORE the earliest transaction in the
+  // file. Anchor it to minDate so calibration sums zero movements before it
+  // (same convention as Moza). Without this the date fell back to "today",
+  // which made applyOpeningBalance treat the opening figure as the CURRENT
+  // balance and wrongly collapse the account total to the opening amount.
+  if (openingBalance && minDate) {
+    openingBalance.date = minDate;
+  }
+
   return {
     success: imported.length > 0,
     total: lines.length - 1,
