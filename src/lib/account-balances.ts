@@ -125,18 +125,43 @@ export async function persistAccountBalances(
     if (!balances.has(row.id)) balances.set(row.id, { balance: 0, balance_predicted: 0 });
   }
 
-  await Promise.all(
+  // Persist each account's balance. We check the result of every UPDATE and
+  // surface failures: previously these errors were silently dropped, so an
+  // RLS / column / type problem would leave `accounts.balance` unchanged while
+  // the import or "Acertar saldo" flow still reported success — the balance on
+  // screen never moved. Now any write failure throws so the caller can report
+  // the real cause instead of failing quietly.
+  const results = await Promise.all(
     Array.from(balances.entries())
       .filter(([id]) => !allowed || allowed.has(id))
-      .map(([id, { balance, balance_predicted }]) =>
-        supabase
+      .map(async ([id, { balance, balance_predicted }]) => {
+        const { data, error } = await supabase
           .schema("money_schema")
           .from("accounts")
           .update({ balance, balance_predicted })
           .eq("id", id)
           .eq("user_id", userId)
-      )
+          .select("id");
+        return { id, error, rows: Array.isArray(data) ? data.length : 0 };
+      })
   );
+
+  const failed = results.filter((r) => r.error);
+  if (failed.length > 0) {
+    throw new Error(
+      "Não foi possível gravar o saldo das contas: " +
+        failed.map((r) => r.error?.message ?? "erro desconhecido").join("; ")
+    );
+  }
+  // An UPDATE that matched zero rows (no error, but blocked by RLS or wrong id)
+  // is also a silent failure — flag it so it doesn't masquerade as success.
+  const noRows = results.filter((r) => !r.error && r.rows === 0);
+  if (noRows.length > 0 && noRows.length === results.length) {
+    throw new Error(
+      "O saldo não foi gravado: o UPDATE não afectou nenhuma linha " +
+        "(provável política RLS de UPDATE em falta em money_schema.accounts)."
+    );
+  }
 }
 
 /**
