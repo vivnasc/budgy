@@ -243,9 +243,10 @@ export async function POST(request: Request) {
       { error: "Body deve conter 'transaction' ou 'transactions'" },
       { status: 400 }
     );
-  } catch {
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erro interno do servidor";
     return NextResponse.json(
-      { error: "Erro interno do servidor" },
+      { error: msg },
       { status: 500 }
     );
   }

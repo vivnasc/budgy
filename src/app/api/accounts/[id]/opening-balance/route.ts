@@ -131,8 +131,9 @@ export async function POST(
       balance_predicted,
       openingAmount,
     });
-  } catch {
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erro interno do servidor";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
