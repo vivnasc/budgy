@@ -87,7 +87,27 @@ export async function GET() {
         bad("→ É ESTE o motivo. Falta a política RLS de UPDATE em money_schema.accounts.");
       } else {
         ok(`TESTE DE GRAVAÇÃO OK em "${esc(first.name)}" — ${affected} linha gravada.`);
-        info("A gravação no servidor funciona. Se o ecrã não muda, é cache do browser/refetch.");
+      }
+
+      // 5) DECISIVE: test writing balance_predicted specifically. The recalc
+      // code writes { balance, balance_predicted } together; if this column is
+      // missing in the live DB the whole UPDATE fails silently → "nada
+      // acontece" even though writing `balance` alone works.
+      const { error: predErr } = await supabase
+        .schema("money_schema")
+        .from("accounts")
+        .update({ balance_predicted: computed.get(first.id)?.balance_predicted ?? 0 })
+        .eq("id", first.id)
+        .eq("user_id", user.id)
+        .select("id");
+
+      if (predErr) {
+        bad(`COLUNA balance_predicted FALHA: ${esc(predErr.message)}`);
+        bad("→ ENCONTRADO! Falta a coluna 'balance_predicted'. É por isto que nada grava.");
+        info("Solução: 1 linha de SQL no Supabase (eu dou-te já).");
+      } else {
+        ok("Coluna balance_predicted grava OK — não é este o problema.");
+        info("Se mesmo assim o saldo não muda no ecrã, é cache do browser/refetch.");
       }
     }
   } catch (e) {
