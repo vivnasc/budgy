@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { X, Trash2, Save, Loader2, AlertCircle, Calendar, Tag, Wallet, Repeat, FileText, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { X, Trash2, Save, Loader2, AlertCircle, Calendar, Tag, Wallet, Repeat, FileText, Clock, CheckCircle2, XCircle, ChevronDown } from "lucide-react";
 import type { Transaction, TransactionStatus } from "@/lib/supabase/types";
+import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
 
 interface TransactionDetailModalProps {
   transaction: Transaction;
@@ -11,19 +12,6 @@ interface TransactionDetailModalProps {
 }
 
 type Mode = "view" | "edit";
-
-const CATEGORY_OPTIONS_EXPENSE = [
-  "Alimentação", "Restaurantes", "Transporte", "Combustível", "Automóvel",
-  "Casa", "Empregados Domésticos", "Jardim & Piscina",
-  "Contas", "Comunicação", "Subscrições", "Saúde", "Beleza & Cuidados",
-  "Educação", "Pessoal", "Compras", "Lazer", "Viagens", "Família",
-  "Animais", "Doações", "Taxas Bancárias", "Dívidas", "Levantamento", "Outros",
-];
-
-const CATEGORY_OPTIONS_INCOME = [
-  "Salário", "Freelance", "Investimento", "Rendimento Passivo", "Bónus",
-  "Reembolso", "Xitique", "Outro Rendimento",
-];
 
 export function TransactionDetailModal({ transaction, onClose, onChanged }: TransactionDetailModalProps) {
   const [mode, setMode] = useState<Mode>("view");
@@ -38,6 +26,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
   const [categoryName, setCategoryName] = useState(transaction.categories?.name ?? "");
   const [isRecurring, setIsRecurring] = useState(transaction.is_recurring ?? false);
   const [status, setStatus] = useState<TransactionStatus>(transaction.status ?? "completed");
+  const [showCat, setShowCat] = useState(false);
 
   // Notas guardadas (descrição original do banco) — ficam na coluna `notes`
   // do supabase ou em tags. Aqui mostramos o que estiver disponível.
@@ -52,7 +41,14 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
       ? "text-indigo-400 bg-indigo-500/10"
       : "text-rose-400 bg-rose-500/10";
 
-  const categoryOptions = transaction.type === "income" ? CATEGORY_OPTIONS_INCOME : CATEGORY_OPTIONS_EXPENSE;
+  // Lista COMPLETA de categorias por tipo (mesma fonte do importador).
+  const catList =
+    transaction.type === "income"
+      ? BUDGY_CATEGORIES.income
+      : transaction.type === "transfer"
+      ? BUDGY_CATEGORIES.transfer
+      : BUDGY_CATEGORIES.expense;
+  const currentCatIcon = catList.find((c) => c.name === categoryName)?.icon ?? "🏷️";
 
   const handleSave = async () => {
     setSaving(true);
@@ -172,16 +168,37 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
           {/* Category */}
           <Field icon={Tag} label="Categoria">
             {mode === "edit" ? (
-              <select
-                value={categoryName}
-                onChange={(e) => setCategoryName(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
-              >
-                <option value="">— escolher —</option>
-                {categoryOptions.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowCat((v) => !v)}
+                  className="w-full flex items-center justify-between bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                >
+                  <span>{categoryName ? `${currentCatIcon} ${categoryName}` : "— escolher —"}</span>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showCat ? "rotate-180" : ""}`} />
+                </button>
+                {showCat && (
+                  <div className="mt-2 grid grid-cols-2 gap-1.5 max-h-52 overflow-y-auto p-2 bg-slate-900 border border-white/10 rounded-lg">
+                    {catList.map((c) => (
+                      <button
+                        key={c.name}
+                        type="button"
+                        onClick={() => {
+                          setCategoryName(c.name);
+                          setShowCat(false);
+                        }}
+                        className={`text-xs px-2 py-2 rounded-lg text-left transition-colors ${
+                          categoryName === c.name
+                            ? "bg-emerald-500 text-white font-semibold"
+                            : "bg-white/5 text-gray-200 hover:bg-white/10"
+                        }`}
+                      >
+                        {c.icon} {c.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : (
               <p className="text-sm text-white">{transaction.categories?.name || "Sem categoria"}</p>
             )}
