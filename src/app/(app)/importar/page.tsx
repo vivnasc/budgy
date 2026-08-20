@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   MessageSquareText,
   Upload,
@@ -47,6 +47,14 @@ interface PendingTransaction {
   status: "pending" | "approved" | "rejected" | "editing";
   /** Preenchido automaticamente a partir de uma decisão aprendida. */
   learned?: boolean;
+  /**
+   * Reconhecido como contrapartida de uma transferência JÁ guardada do outro
+   * lado (ex: a saída no CPC já guardada é a contrapartida desta entrada no
+   * Moza). É apenas reconhecimento — a linha continua a ser guardada.
+   */
+  counterpart?: boolean;
+  /** Nome da conta da transferência já guardada (o outro lado). */
+  counterpartAccount?: string | null;
 }
 
 // ─── Confirmação / categorias ────────────────────────────────────────────────
@@ -81,12 +89,75 @@ function defaultCategoryForType(
  * (empréstimo, dinheiro de alguém), não categorizados, ou valores grandes.
  */
 function needsConfirmation(tx: PendingTransaction): boolean {
+  // Uma contrapartida reconhecida já está resolvida — não é algo a confirmar.
+  if (tx.counterpart === true) return false;
   return (
     tx.type === "transfer" ||
     (tx.type === "income" && tx.category !== "Salário") ||
     tx.category === "Outros" ||
     Math.abs(tx.amount) >= 100000
   );
+}
+
+/**
+ * Depois de a lista de movimentos estar construída, pergunta ao servidor se
+ * alguma transferência é contrapartida de uma transferência JÁ guardada do
+ * outro lado. Marca as reconhecidas com `counterpart` para não pedir
+ * reclassificação nem parecer dinheiro novo.
+ *
+ * Corre uma vez por lista construída (chaveado no conjunto de ids). Falha em
+ * silêncio — é uma camada extra "nice-to-have".
+ */
+function useCounterpartMatching(
+  transactions: PendingTransaction[],
+  setTransactions: React.Dispatch<React.SetStateAction<PendingTransaction[]>>
+) {
+  const doneKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const ids = transactions.map((t) => t.id).join(",");
+    if (!ids || doneKeyRef.current === ids) return;
+
+    const candidates = transactions
+      .filter((t) => t.type === "transfer")
+      .map((t) => ({ tempId: t.id, date: t.date, amount: t.amount, type: t.type }));
+
+    // Marca já para não repetir (mesmo quando não há transferências).
+    doneKeyRef.current = ids;
+    if (candidates.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/transactions/match-transfers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ candidates }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const matched = (data?.matched ?? []) as Array<{
+          tempId: string;
+          account: string | null;
+          date: string;
+        }>;
+        if (cancelled || matched.length === 0) return;
+        const byId = new Map(matched.map((m) => [m.tempId, m]));
+        setTransactions((prev) =>
+          prev.map((tx) => {
+            const m = byId.get(tx.id);
+            return m ? { ...tx, counterpart: true, counterpartAccount: m.account } : tx;
+          })
+        );
+      } catch {
+        // Silencioso — o reconhecimento de contrapartida é opcional.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [transactions, setTransactions]);
 }
 
 // ─── Page Component ──────────────────────────────────────────────────────────
@@ -328,6 +399,9 @@ function SMSTab() {
   const [parsing, setParsing] = useState(false);
   const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Reconhece contrapartidas de transferências já guardadas do outro lado.
+  useCounterpartMatching(pendingTransactions, setPendingTransactions);
 
   const handleParseSMS = useCallback(async () => {
     if (!smsText.trim()) return;
@@ -728,6 +802,16 @@ function PendingTransactionCard({
         </div>
       </div>
 
+      {/* Contrapartida reconhecida — transferência já registada do outro lado */}
+      {tx.counterpart && (
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
+          <span className="text-sm font-semibold text-blue-700">
+            🔗 Contrapartida — já registada
+            {tx.counterpartAccount ? ` (${tx.counterpartAccount})` : ""}
+          </span>
+        </div>
+      )}
+
       {/* Type toggle */}
       {tx.status !== "rejected" && (
         <div className="flex gap-1.5 mb-3">
@@ -1001,6 +1085,9 @@ function ImportPreview({
       }))
     )
   );
+
+  // Reconhece contrapartidas de transferências já guardadas do outro lado.
+  useCounterpartMatching(pending, setPending);
 
   const handleApprove = (id: string) => {
     setPending((prev) =>
