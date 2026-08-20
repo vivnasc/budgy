@@ -253,10 +253,9 @@ export function parseMpesaPdfItems(items: MpesaTextItem[]): ImportResult {
     // Real balance movement (money in positive, money out negative).
     const realMovement = credito > 0 ? credito : -Math.abs(debito);
 
-    // Stored amount: positive magnitude for income/expense; signed for
-    // transfers so that the account-balances delta (`-amount`) reproduces the
-    // real movement (money out → +, money in → −). See file header.
-    const amount = type === "transfer" ? -realMovement : magnitude;
+    // A base de dados exige `amount > 0`, por isso guardamos SEMPRE a magnitude
+    // positiva (como os importadores CSV/Excel); a direcção vem do `type`.
+    const amount = magnitude;
 
     // The first anchor in file order is the earliest transaction (the PDF is
     // chronological top→down). Its opening = saldo − realMovement.
