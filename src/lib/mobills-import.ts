@@ -1194,6 +1194,7 @@ export const BUDGY_CATEGORIES = {
     { name: "Combustível", icon: "⛽", color: "#8B5CF6" },
     { name: "Automóvel", icon: "🚗", color: "#7C3AED" },
     { name: "Casa", icon: "🏠", color: "#3B82F6" },
+    { name: "Obras & Habitação", icon: "🧱", color: "#B45309" },
     { name: "Empregados Domésticos", icon: "👷", color: "#0891B2" },
     { name: "Jardim & Piscina", icon: "🌱", color: "#84CC16" },
     { name: "Contas", icon: "📄", color: "#0EA5E9" },
