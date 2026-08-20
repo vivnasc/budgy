@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   MessageSquareText,
   Upload,
@@ -38,11 +38,27 @@ import { SUPPORTED_BANKS } from "@/lib/sms-parser";
 import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
 import { SUPPORTED_BANK_FORMATS, type BankFormat } from "@/lib/bank-statement-parser";
 import { applyLearnedRules, rememberDecision } from "@/lib/learned-rules";
+import {
+  applyMobillsMappingAndCutoff,
+  rebuildMobillsResult,
+  getMobillsAccountNames,
+  defaultTargetFor,
+  earliestDatesByAccount,
+  CREATE_NEW,
+} from "@/lib/mobills-safe";
+import { useAccounts, useTransactions } from "@/hooks/use-supabase-data";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type Tab = "sms" | "import";
-type ImportStep = "upload" | "preview" | "mapping" | "confirm";
+type ImportStep = "upload" | "mobills" | "preview" | "mapping" | "confirm";
+
+/** Resumo do corte Mobills mostrado no topo da revisão. */
+interface MobillsCutSummary {
+  total: number;
+  kept: number;
+  dropped: number;
+}
 
 interface PendingTransaction {
   id: string;
@@ -1113,7 +1129,24 @@ function ImportTab() {
   const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  // Resultado original do Mobills (antes do mapeamento/corte) e resumo do corte.
+  const [mobillsRaw, setMobillsRaw] = useState<ImportResult | null>(null);
+  const [mobillsSummary, setMobillsSummary] = useState<MobillsCutSummary | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Depois do parse: Mobills vai primeiro ao passo de preparação (mapeamento +
+  // corte); os restantes formatos vão directamente à revisão.
+  const routeAfterParse = useCallback((result: ImportResult, fmt: string) => {
+    if (fmt === "mobills") {
+      setMobillsRaw(result);
+      setImportResult(null);
+      setMobillsSummary(null);
+      setStep("mobills");
+    } else {
+      setImportResult(result);
+      setStep("preview");
+    }
+  }, []);
 
   const processFile = useCallback(async (file: File) => {
     setImporting(true);
@@ -1130,9 +1163,8 @@ function ImportTab() {
         const { parseMpesaPdfFile } = await import("@/lib/mpesa-pdf-client");
         const data = await parseMpesaPdfFile(file);
         if (data.success) {
-          setImportResult(data);
           setDetectedFormat("mpesa");
-          setStep("preview");
+          routeAfterParse(data, "mpesa");
         } else {
           setError(
             data.errors[0] ||
@@ -1151,9 +1183,9 @@ function ImportTab() {
 
         const data = await response.json();
         if (data.success) {
-          setImportResult(data);
-          setDetectedFormat(data.detectedFormat || "auto");
-          setStep("preview");
+          const fmt = data.detectedFormat || "auto";
+          setDetectedFormat(fmt);
+          routeAfterParse(data, fmt);
         } else {
           setError(data.error || "Erro ao processar ficheiro");
         }
@@ -1168,9 +1200,9 @@ function ImportTab() {
 
         const data = await response.json();
         if (data.success) {
-          setImportResult(data);
-          setDetectedFormat(data.detectedFormat || "auto");
-          setStep("preview");
+          const fmt = data.detectedFormat || "auto";
+          setDetectedFormat(fmt);
+          routeAfterParse(data, fmt);
         } else {
           setError(data.error || "Erro ao processar ficheiro");
         }
@@ -1181,7 +1213,7 @@ function ImportTab() {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, []);
+  }, [routeAfterParse]);
 
   const handleFileInput = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1254,12 +1286,218 @@ function ImportTab() {
           )}
         </>
       )}
+      {step === "mobills" && mobillsRaw && (
+        <MobillsPrepareStep
+          result={mobillsRaw}
+          onBack={() => { setStep("upload"); setMobillsRaw(null); setDetectedFormat(null); }}
+          onContinue={(filtered, summary) => {
+            setImportResult(filtered);
+            setMobillsSummary(summary);
+            setStep("preview");
+          }}
+        />
+      )}
       {step === "preview" && importResult && (
         <ImportPreview
           result={importResult}
           detectedFormat={detectedFormat}
-          onBack={() => { setStep("upload"); setImportResult(null); setDetectedFormat(null); }}
+          mobillsSummary={mobillsSummary}
+          onBack={() => {
+            // Volta ao passo de preparação Mobills se veio de lá; senão, ao upload.
+            if (mobillsRaw) {
+              setStep("mobills");
+              setImportResult(null);
+              setMobillsSummary(null);
+            } else {
+              setStep("upload");
+              setImportResult(null);
+              setDetectedFormat(null);
+            }
+          }}
         />
+      )}
+    </div>
+  );
+}
+
+// ─── Passo de Preparação Mobills (mapeamento de contas + corte por conta) ────
+
+function MobillsPrepareStep({
+  result,
+  onBack,
+  onContinue,
+}: {
+  result: ImportResult;
+  onBack: () => void;
+  onContinue: (filtered: ImportResult, summary: MobillsCutSummary) => void;
+}) {
+  const { data: accounts, loading: accountsLoading } = useAccounts();
+  // Janela larga para apanhar a data mais antiga de cada conta.
+  const { data: existingTx, loading: txLoading } = useTransactions({
+    from: "2000-01-01",
+    limit: 100000,
+  });
+
+  const loading = accountsLoading || txLoading;
+
+  const mobillsAccounts = useMemo(() => getMobillsAccountNames(result), [result]);
+  const appAccountNames = useMemo(
+    () => (accounts ?? []).map((a) => a.name),
+    [accounts]
+  );
+
+  // Data mais antiga já existente por nome de conta (o corte).
+  const earliestByAccount = useMemo(
+    () =>
+      earliestDatesByAccount(
+        (existingTx ?? []).map((t) => ({ date: t.date, accountName: t.accounts?.name ?? null }))
+      ),
+    [existingTx]
+  );
+
+  // Mapeamento: nome Mobills → nome de conta app OU CREATE_NEW.
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+
+  // Preenche defaults quando as contas carregam (ou os nomes Mobills mudam).
+  useEffect(() => {
+    if (loading) return;
+    setMapping((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const name of mobillsAccounts) {
+        if (next[name] === undefined) {
+          next[name] = defaultTargetFor(name, appAccountNames);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [loading, mobillsAccounts, appAccountNames]);
+
+  const handleContinue = () => {
+    // Mapeamento final: CREATE_NEW → o próprio nome Mobills (conta nova).
+    const finalMapping: Record<string, string> = {};
+    for (const name of mobillsAccounts) {
+      const target = mapping[name] ?? defaultTargetFor(name, appAccountNames);
+      finalMapping[name] = target === CREATE_NEW ? name : target;
+    }
+
+    // Cortes: só para contas destino que JÁ têm dados existentes.
+    const cutoffs: Record<string, string> = {};
+    for (const name of mobillsAccounts) {
+      const target = finalMapping[name]!;
+      const cutoff = earliestByAccount[target];
+      if (cutoff) cutoffs[target] = cutoff;
+    }
+
+    const { kept, droppedCount, total } = applyMobillsMappingAndCutoff(
+      result.imported,
+      finalMapping,
+      cutoffs
+    );
+    const filtered = rebuildMobillsResult(result, kept, finalMapping);
+    onContinue(filtered, { total, kept: kept.length, dropped: droppedCount });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="text-sm font-bold text-emerald-900">Preparar importação Mobills</h3>
+            <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+              Para não duplicar o que já importaste dos extratos, o Mobills só entra em datas
+              <strong> ANTERIORES</strong> ao que já tens em cada conta. Confirma o mapeamento
+              das contas em baixo.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-gray-500">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+          <span className="text-sm">A ler as tuas contas e datas...</span>
+        </div>
+      ) : (
+        <>
+          {/* (a) Mapeamento de contas */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+            <h3 className="text-sm font-bold text-gray-900 mb-1">Mapeamento de contas</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Liga cada conta do Mobills a uma conta da app (ou cria uma nova).
+            </p>
+            <div className="space-y-3">
+              {mobillsAccounts.map((name) => {
+                const selected = mapping[name] ?? defaultTargetFor(name, appAccountNames);
+                const targetName = selected === CREATE_NEW ? name : selected;
+                const cutoff = selected === CREATE_NEW ? undefined : earliestByAccount[targetName];
+                return (
+                  <div key={name} className="rounded-xl border border-gray-100 p-3">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-800">{name}</span>
+                      <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                      <select
+                        value={selected}
+                        onChange={(e) =>
+                          setMapping((prev) => ({ ...prev, [name]: e.target.value }))
+                        }
+                        className="flex-1 min-w-[140px] text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      >
+                        {appAccountNames.map((appName) => (
+                          <option key={appName} value={appName}>
+                            {appName}
+                          </option>
+                        ))}
+                        <option value={CREATE_NEW}>Criar nova conta &quot;{name}&quot;</option>
+                      </select>
+                    </div>
+                    {/* (b) Corte por conta */}
+                    <p className="text-[11px] mt-2 ml-0.5">
+                      {cutoff ? (
+                        <span className="text-amber-700">
+                          Corte: só entram transações <strong>antes de {cutoff}</strong> (o que já
+                          tens fica intacto).
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700">Sem dados — importa tudo.</span>
+                      )}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Explicação do corte */}
+          <div className="bg-amber-50 rounded-2xl border border-amber-100 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-amber-800 leading-relaxed">
+                Para não duplicar o que já importaste dos extratos, o Mobills só entra em datas
+                ANTERIORES ao que já tens em cada conta. Contas novas (sem dados) importam tudo.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="flex items-center justify-center gap-2 bg-white text-gray-700 border border-gray-200 font-semibold py-3 px-5 rounded-2xl hover:bg-gray-50"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Voltar
+            </button>
+            <button
+              onClick={handleContinue}
+              className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 text-white font-semibold py-3 rounded-2xl hover:bg-emerald-600 shadow-lg shadow-emerald-500/20"
+            >
+              Continuar
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
@@ -1270,10 +1508,12 @@ function ImportTab() {
 function ImportPreview({
   result,
   detectedFormat,
+  mobillsSummary,
   onBack,
 }: {
   result: ImportResult;
   detectedFormat?: string | null;
+  mobillsSummary?: MobillsCutSummary | null;
   onBack: () => void;
 }) {
   const [saving, setSaving] = useState(false);
@@ -1394,6 +1634,21 @@ function ImportPreview({
 
   return (
     <div className="space-y-6">
+      {/* Resumo do corte Mobills (anti-duplicados) */}
+      {mobillsSummary && (
+        <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-blue-800 leading-relaxed">
+              De <strong>{mobillsSummary.total}</strong> linhas do Mobills,{" "}
+              <strong>{mobillsSummary.kept}</strong> entram (as anteriores aos teus extratos);{" "}
+              <strong>{mobillsSummary.dropped}</strong> saltadas por já estarem cobertas pelos
+              extratos.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Summary */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
         <div className="flex items-center justify-between mb-4">
