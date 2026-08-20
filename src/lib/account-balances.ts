@@ -81,8 +81,17 @@ export async function computeAccountBalances(
 
     if (tx.account_id) {
       const acc = ensure(tx.account_id);
+      // income: +magnitude · expense: -magnitude · transfer: +amount SINALIZADO
+      // (o valor de uma transferência já traz o sinal da direcção — entrada
+      // positiva, saída negativa — por isso soma-se directamente).
       const delta =
-        tx.type === "income" ? amt : tx.type === "expense" || tx.type === "transfer" ? -amt : 0;
+        tx.type === "income"
+          ? amt
+          : tx.type === "expense"
+            ? -amt
+            : tx.type === "transfer"
+              ? amt
+              : 0;
       if (counts_for_predicted) acc.balance_predicted += delta;
       if (isCompleted) acc.balance += delta;
     }

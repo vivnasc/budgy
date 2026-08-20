@@ -149,7 +149,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
             ) : (
               <p className={`text-3xl font-bold ${transaction.type === "income" ? "text-emerald-400" : transaction.type === "transfer" ? "text-indigo-400" : "text-rose-400"}`}>
                 {transaction.type === "income" ? "+" : transaction.type === "expense" ? "-" : ""}
-                {Number(transaction.amount).toLocaleString("pt-MZ")}{" "}
+                {Math.abs(Number(transaction.amount)).toLocaleString("pt-MZ")}{" "}
                 <span className="text-sm font-normal text-gray-500">{transaction.currency}</span>
               </p>
             )}

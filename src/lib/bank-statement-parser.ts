@@ -234,7 +234,7 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     const debit = parseCPCAmount(debitRaw);
     const credit = parseCPCAmount(creditRaw);
 
-    const amount = credit > 0 ? credit : Math.abs(debit);
+    let amount = credit > 0 ? credit : Math.abs(debit);
     if (amount === 0) {
       skipped++;
       continue;
@@ -274,9 +274,15 @@ export function parseCPCStatement(csvContent: string): ImportResult {
       type = "expense";
     }
 
+    // Transferências: o valor passa a ser SINALIZADO pela direcção — dinheiro a
+    // ENTRAR na conta (crédito) é positivo, a SAIR (débito) é negativo. Assim o
+    // saldo soma correctamente uma transferência recebida em vez de a subtrair.
+    // Rendimentos/despesas mantêm-se magnitude positiva (direcção vem do tipo).
+    if (type === "transfer") amount = credit > 0 ? Math.abs(amount) : -Math.abs(amount);
+
     // Auto-categorize based on merchant/description
     const searchText = `${merchant} ${description}`;
-    const categoryResult = autoCategorize(searchText, type, amount);
+    const categoryResult = autoCategorize(searchText, type, Math.abs(amount));
 
     // Special CPC-specific categorization
     let mappedCategory = categoryResult.category;
@@ -536,8 +542,10 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
     const debit = parseMozaAmount(debitRaw);
     const credit = parseMozaAmount(creditRaw);
 
-    const amount = credit > 0 ? credit : debit;
-    if (amount === 0) {
+    // Magnitude sempre positiva. (O débito do Moza vem já com sinal "-" de
+    // parseMozaAmount, por isso normalizamos com Math.abs.)
+    const magnitude = credit > 0 ? credit : Math.abs(debit);
+    if (magnitude === 0) {
       skipped++;
       continue;
     }
@@ -565,8 +573,23 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
       type = "transfer";
     }
 
+    // Transferências interbancárias (recebidas/enviadas: "Transferência de/para …")
+    // são transferências entre contas, não rendimento. Mas o SALÁRIO ganha —
+    // linhas TEI RCB Sal / MTR BIM ORD mantêm-se income/Salário.
+    if (
+      /^\s*Transfer[eê]ncia\b/i.test(descriptionRaw) &&
+      !/TEI RCB.*Sal\b|MTR BIM ORD/i.test(descriptionRaw)
+    ) {
+      type = "transfer";
+    }
+
+    // Valor final: magnitude para income/expense; SINALIZADO para transferências
+    // (entrada positiva, saída negativa) — usado no imported[], dedup e resumo.
+    const amount =
+      type === "transfer" ? (credit > 0 ? magnitude : -magnitude) : magnitude;
+
     // Auto-categorize
-    const categoryResult = autoCategorize(cleanDesc, type, amount);
+    const categoryResult = autoCategorize(cleanDesc, type, magnitude);
 
     // Moza-specific categorization
     let mappedCategory = categoryResult.category;
@@ -579,6 +602,7 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
     else if (/TRF_Cart_Dig_Emola/i.test(descriptionRaw)) mappedCategory = "Transferência";
     else if (/TEI RCB.*Sal\b|MTR BIM ORD/i.test(descriptionRaw)) mappedCategory = "Salário";
     else if (/TEI RCB.*Transfer/i.test(descriptionRaw)) mappedCategory = "Transferência";
+    else if (/^\s*Transfer[eê]ncia\b/i.test(descriptionRaw)) mappedCategory = "Transferência";
     else if (/TRF-Breno/i.test(descriptionRaw)) mappedCategory = "Família";
     else if (/Levantamento/i.test(descriptionRaw)) mappedCategory = "Levantamento";
 
@@ -904,7 +928,7 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
     const credit = Math.abs(parseFlexibleAmount(row.credit ?? ""));
     const singleAmount = parseFlexibleAmount(row.amount ?? "");
 
-    const amount = credit > 0 ? credit : debit > 0 ? debit : Math.abs(singleAmount);
+    let amount = credit > 0 ? credit : debit > 0 ? debit : Math.abs(singleAmount);
     if (amount === 0) {
       skipped++;
       continue;
@@ -926,8 +950,10 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
     } else if (/^Lvto\.\s*C\.\s*Auto\./i.test(description)) {
       type = "transfer";
       description = "Levantamento ATM";
-    } else if (/^Transferencia\b/i.test(description)) {
-      type = "income";
+    } else if (/Transfer[eê]ncia/i.test(description)) {
+      // Transferência entre contas (ex.: "Transferencia  MOZABANCO ... Recebida")
+      // — não é rendimento nem gasto. Direcção vem do sinal (crédito/débito).
+      type = "transfer";
       description = description.replace(/\s+\d{6,}.*$/i, "").replace(/\s+ENET.*$/i, "").trim();
     } else if (/^Refund\b/i.test(description)) {
       type = "income";
@@ -939,20 +965,30 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
       .replace(/\s+\d{6,}\s+\w+\s+\w+.*$/i, "")
       .trim();
 
-    const categoryResult = autoCategorize(description, type, amount);
+    const categoryResult = autoCategorize(description, type, Math.abs(amount));
+    let mappedCategory = categoryResult.category;
+
+    // Transferências: valor SINALIZADO pela direcção (entrada +, saída -) e
+    // categoria fixa "Transferência".
+    if (type === "transfer" && /Transfer[eê]ncia/i.test(description)) {
+      amount = credit > 0 ? Math.abs(amount) : -Math.abs(amount);
+      mappedCategory = "Transferência";
+    } else if (type === "transfer") {
+      amount = credit > 0 ? Math.abs(amount) : -Math.abs(amount);
+    }
 
     if (!minDate || date < minDate) minDate = date;
     if (!maxDate || date > maxDate) maxDate = date;
     if (type === "income") totalIncome += amount;
     else if (type === "expense") totalExpenses += amount;
     else totalTransfers += amount;
-    categoryCounts[categoryResult.category] = (categoryCounts[categoryResult.category] || 0) + 1;
+    categoryCounts[mappedCategory] = (categoryCounts[mappedCategory] || 0) + 1;
 
     imported.push({
       date,
       description,
       originalCategory: description,
-      mappedCategory: categoryResult.category,
+      mappedCategory,
       account: "Standard Bank",
       amount,
       type,
@@ -976,7 +1012,9 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
   // calibrates the account to the real closing balance.
   let openingBalances: Array<{ accountName: string; amount: number; date: string }> = [];
   if (closingBalance !== null && minDate) {
-    const netSigned = totalIncome - totalExpenses - totalTransfers;
+    // totalTransfers já vem sinalizado (entrada +, saída -), por isso o efeito
+    // líquido no saldo é income - expenses + totalTransfers.
+    const netSigned = totalIncome - totalExpenses + totalTransfers;
     const openingAmount = closingBalance - netSigned;
     openingBalances = [{ accountName: "Standard Bank", amount: openingAmount, date: minDate }];
   }
