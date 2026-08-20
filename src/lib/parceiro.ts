@@ -10,6 +10,7 @@
  */
 
 import { signatureFor } from "@/lib/learned-rules";
+import { cycleKeyFor, cycleLabel } from "@/lib/period";
 import type { Account, Transaction, Goal } from "@/lib/supabase/types";
 
 // ─── Chave da API (só no dispositivo) ───────────────────────────────────────
@@ -80,10 +81,6 @@ function isSpendable(tx: Transaction): boolean {
   return true;
 }
 
-function monthKey(dateStr: string): string {
-  return (dateStr ?? "").slice(0, 7);
-}
-
 function round(n: number): number {
   return Math.round(n);
 }
@@ -95,6 +92,8 @@ const STABLE_CV_MAX = 0.35;
 export interface FinancialContext {
   hoje: string;
   mes_actual: string;
+  ciclo_actual: string;
+  dia_inicio_mes: number;
   saldo_total_mzn: number;
   contas: { nome: string; saldo_mzn: number }[];
   mes: {
@@ -145,45 +144,50 @@ function looksLikeTiciane(name: string): boolean {
  * @param txs Transações de uma janela de vários meses (idealmente ~6 meses).
  * @param accounts Contas activas.
  * @param goals Metas de poupança.
- * @param anchorKey YYYY-MM do mês "actual" a analisar (mês com dados mais recentes).
+ * @param anchorCycleStart Início do ciclo "actual" (YYYY-MM-DD) a analisar.
+ * @param startDay Dia de início do ciclo de salário (1..28). 1 = mês do calendário.
  */
 export function buildFinancialContext(
   txs: Transaction[],
   accounts: Account[],
   goals: Goal[],
-  anchorKey: string
+  anchorCycleStart: string,
+  startDay: number
 ): FinancialContext {
   const spendable = txs.filter(isSpendable);
   const expenses = spendable.filter((t) => t.type === "expense");
   const incomes = spendable.filter((t) => t.type === "income");
 
-  // ── Mês actual ──
-  const curExp = expenses.filter((t) => monthKey(t.date) === anchorKey);
-  const curInc = incomes.filter((t) => monthKey(t.date) === anchorKey);
+  // Chave = ciclo de salário (com startDay=1 é idêntico ao mês do calendário).
+  const cycleKey = (dateStr: string) => cycleKeyFor(dateStr ?? "", startDay);
+
+  // ── Ciclo actual ──
+  const curExp = expenses.filter((t) => cycleKey(t.date) === anchorCycleStart);
+  const curInc = incomes.filter((t) => cycleKey(t.date) === anchorCycleStart);
   const entradas = curInc.reduce((s, t) => s + Math.abs(t.amount), 0);
   const saidas = curExp.reduce((s, t) => s + Math.abs(t.amount), 0);
   const poupanca = entradas - saidas;
   const taxaPoupanca = entradas > 0 ? Math.round((poupanca / entradas) * 100) : 0;
 
-  // ── Histórico (últimos meses presentes, máx 5) ──
-  const byMonth = new Map<string, { ent: number; sai: number }>();
+  // ── Histórico (últimos ciclos presentes, máx 5) ──
+  const byCycle = new Map<string, { ent: number; sai: number }>();
   for (const t of incomes) {
-    const k = monthKey(t.date);
-    const e = byMonth.get(k) ?? { ent: 0, sai: 0 };
+    const k = cycleKey(t.date);
+    const e = byCycle.get(k) ?? { ent: 0, sai: 0 };
     e.ent += Math.abs(t.amount);
-    byMonth.set(k, e);
+    byCycle.set(k, e);
   }
   for (const t of expenses) {
-    const k = monthKey(t.date);
-    const e = byMonth.get(k) ?? { ent: 0, sai: 0 };
+    const k = cycleKey(t.date);
+    const e = byCycle.get(k) ?? { ent: 0, sai: 0 };
     e.sai += Math.abs(t.amount);
-    byMonth.set(k, e);
+    byCycle.set(k, e);
   }
-  const historico = Array.from(byMonth.entries())
+  const historico = Array.from(byCycle.entries())
     .sort((a, b) => (a[0] < b[0] ? 1 : -1))
     .slice(0, 5)
-    .map(([mes, v]) => ({
-      mes,
+    .map(([key, v]) => ({
+      mes: cycleLabel(key, startDay),
       entradas_mzn: round(v.ent),
       saidas_mzn: round(v.sai),
     }));
@@ -214,7 +218,7 @@ export function buildFinancialContext(
       b = { monthTotals: new Map(), labels: new Map() };
       buckets.set(sig, b);
     }
-    const mk = monthKey(t.date);
+    const mk = cycleKey(t.date);
     b.monthTotals.set(mk, (b.monthTotals.get(mk) ?? 0) + Math.abs(t.amount));
     const desc = (t.description ?? "").trim();
     if (desc) b.labels.set(desc, (b.labels.get(desc) ?? 0) + 1);
@@ -262,15 +266,13 @@ export function buildFinancialContext(
   const metaTiciane = metaList.find((m) => looksLikeTiciane(m.nome)) ?? null;
 
   const nowIso = new Date().toISOString().slice(0, 10);
-  const mesActualLabel = (() => {
-    const [y, m] = anchorKey.split("-").map(Number);
-    const d = new Date(y ?? 2000, (m ?? 1) - 1, 1);
-    return d.toLocaleDateString("pt-MZ", { month: "long", year: "numeric" });
-  })();
+  const cicloLabel = cycleLabel(anchorCycleStart, startDay, true);
 
   return {
     hoje: nowIso,
-    mes_actual: mesActualLabel,
+    mes_actual: cicloLabel,
+    ciclo_actual: cicloLabel,
+    dia_inicio_mes: startDay,
     saldo_total_mzn: round(saldoTotal),
     contas,
     mes: {
@@ -286,7 +288,7 @@ export function buildFinancialContext(
     metas: metaList,
     meta_ticiane: metaTiciane,
     nota:
-      "Todos os valores estão em Meticais (MZN). Transferências entre contas próprias já foram excluídas dos totais de entradas/saídas.",
+      `Todos os valores estão em Meticais (MZN). Transferências entre contas próprias já foram excluídas dos totais de entradas/saídas. O mês da utilizadora começa no dia ${startDay}: quando falares de "este mês/ciclo" refere-te ao ciclo ${cicloLabel} (de salário a salário, não ao mês do calendário).`,
   };
 }
 

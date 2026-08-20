@@ -11,7 +11,7 @@ import {
   Sparkles,
   AlertTriangle,
 } from "lucide-react";
-import { useTransactions, useAccounts, useGoals, useLatestMonthOffset } from "@/hooks/use-supabase-data";
+import { useTransactions, useAccounts, useGoals, useLatestTransactionDate } from "@/hooks/use-supabase-data";
 import {
   buildFinancialContext,
   streamParceiro,
@@ -21,25 +21,12 @@ import {
   maskKey,
   type ChatMessage,
 } from "@/lib/parceiro";
+import { currentCycleStart, shiftCycle, cycleRangeFor } from "@/lib/period";
+import { CicloSettings, useCycleStartDay } from "@/components/ciclo-settings";
 
-// ─── Janela de dados: 6 meses ancorados no mês com dados mais recentes ───────
+// ─── Janela de dados: 6 ciclos ancorados no ciclo com dados mais recentes ────
 
 const WINDOW_MONTHS = 6;
-
-function monthKeyForOffset(offset: number): string {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function monthBounds(offset: number): { from: string; to: string } {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  const to = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
-  return { from, to };
-}
 
 // ─── Render simples de **negrito** + quebras de linha ────────────────────────
 
@@ -190,19 +177,30 @@ export default function ParceiroPage() {
     setMaskedKey(k ? maskKey(k) : "");
   }, []);
 
+  // ── Ciclo de salário (configurável) ──
+  const [startDay, setStartDay] = useCycleStartDay();
+
   // ── Dados reais ──
-  const latestOffset = useLatestMonthOffset();
-  const effectiveOffset = latestOffset ?? 0;
+  const latestDate = useLatestTransactionDate();
+  const anchorISO = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return latestDate && latestDate <= today ? latestDate : today;
+  }, [latestDate]);
+
+  const anchorCycleStart = useMemo(
+    () => currentCycleStart(anchorISO, startDay),
+    [anchorISO, startDay]
+  );
+
   const { from, to } = useMemo(() => {
-    const start = monthBounds(effectiveOffset - (WINDOW_MONTHS - 1));
-    const end = monthBounds(effectiveOffset);
-    return { from: start.from, to: end.to };
-  }, [effectiveOffset]);
+    const start = shiftCycle(anchorCycleStart, -(WINDOW_MONTHS - 1));
+    const end = cycleRangeFor(anchorCycleStart, startDay).to;
+    return { from: start, to: end };
+  }, [anchorCycleStart, startDay]);
 
   const { data: transactions } = useTransactions({ from, to, limit: 5000 });
   const { data: accounts } = useAccounts();
   const { data: goals } = useGoals();
-  const anchorKey = useMemo(() => monthKeyForOffset(effectiveOffset), [effectiveOffset]);
 
   const context = useMemo(
     () =>
@@ -210,9 +208,10 @@ export default function ParceiroPage() {
         transactions ?? [],
         accounts ?? [],
         goals ?? [],
-        anchorKey
+        anchorCycleStart,
+        startDay
       ),
-    [transactions, accounts, goals, anchorKey]
+    [transactions, accounts, goals, anchorCycleStart, startDay]
   );
 
   // Auto-scroll para o fim.
@@ -320,14 +319,17 @@ export default function ParceiroPage() {
       </header>
 
       <div className="pt-4 space-y-4 flex-1 flex flex-col min-h-0">
-        {/* Definições da chave */}
+        {/* Definições da chave + ciclo de salário */}
         {(!hasKey || showSettings) && (
-          <KeySettings
-            hasKey={hasKey}
-            maskedKey={maskedKey}
-            onSave={handleSaveKey}
-            onRemove={handleRemoveKey}
-          />
+          <>
+            <KeySettings
+              hasKey={hasKey}
+              maskedKey={maskedKey}
+              onSave={handleSaveKey}
+              onRemove={handleRemoveKey}
+            />
+            <CicloSettings startDay={startDay} onChange={setStartDay} />
+          </>
         )}
 
         {hasKey && (

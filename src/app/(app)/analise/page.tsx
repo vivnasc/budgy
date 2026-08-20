@@ -18,34 +18,23 @@ import {
   ChevronDown,
   ShoppingBag,
 } from "lucide-react";
-import { useTransactions, useLatestMonthOffset } from "@/hooks/use-supabase-data";
+import { useTransactions, useLatestTransactionDate } from "@/hooks/use-supabase-data";
 import { signatureFor } from "@/lib/learned-rules";
 import type { Transaction } from "@/lib/supabase/types";
+import {
+  cycleKeyFor,
+  cycleLabel,
+  cycleShortLabel,
+  cycleRangeFor,
+  currentCycleStart,
+  shiftCycle,
+} from "@/lib/period";
+import { CicloSettings, useCycleStartDay } from "@/components/ciclo-settings";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
 function formatMZN(value: number): string {
   return Math.round(value).toLocaleString("pt-MZ", { maximumFractionDigits: 0 });
-}
-
-/** YYYY-MM do mês a `offset` meses do mês actual. */
-function monthKeyForOffset(offset: number): string {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function monthLabelForOffset(offset: number): string {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  return d.toLocaleDateString("pt-MZ", { month: "long", year: "numeric" });
-}
-
-/** Rótulo curto (ex: "jan") a partir de YYYY-MM. */
-function shortMonthLabel(key: string): string {
-  const [y, m] = key.split("-").map(Number);
-  const d = new Date(y ?? 2000, (m ?? 1) - 1, 1);
-  return d.toLocaleDateString("pt-MZ", { month: "short" }).replace(".", "");
 }
 
 /** Data curta (ex: "05 jan") a partir de YYYY-MM-DD. */
@@ -55,16 +44,6 @@ function shortDate(dateStr: string): string {
   return d
     .toLocaleDateString("pt-MZ", { day: "2-digit", month: "short" })
     .replace(".", "");
-}
-
-/** Início (dia 1) e fim (último dia) do mês a `offset` meses, em YYYY-MM-DD. */
-function monthBounds(offset: number): { from: string; to: string } {
-  const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  const to = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
-  return { from, to };
 }
 
 function median(nums: number[]): number {
@@ -212,12 +191,16 @@ function computeAnalysis(
   currentKey: string,
   prevKey: string,
   currentLabel: string,
-  prevLabel: string
+  prevLabel: string,
+  startDay: number
 ): Analysis {
   const spendable = txs.filter(isSpendable);
   if (spendable.length === 0) return emptyAnalysis(currentLabel, prevLabel);
 
-  const keyOf = (tx: Transaction) => tx.date.slice(0, 7);
+  // Chave = ciclo de salário (não mês do calendário). Com startDay=1 é idêntico
+  // ao mês. currentKey/prevKey são inícios de ciclo (YYYY-MM-DD).
+  const keyOf = (tx: Transaction) => cycleKeyFor(tx.date, startDay);
+  const pw = startDay === 1 ? "mês" : "ciclo"; // palavra do período nas sugestões
   const expenses = spendable.filter((t) => t.type === "expense");
   const incomes = spendable.filter((t) => t.type === "income");
 
@@ -344,7 +327,7 @@ function computeAnalysis(
   const trendKeys = orderedMonths.slice(-6);
   const trend: TrendPoint[] = trendKeys.map((k) => ({
     key: k,
-    label: shortMonthLabel(k),
+    label: cycleShortLabel(k),
     total: monthSpend.get(k) ?? 0,
   }));
 
@@ -380,7 +363,7 @@ function computeAnalysis(
   if (subsMensal > 0) {
     suggestions.push({
       tone: "info",
-      text: `Subscrições: cerca de ${formatMZN(subsMensal)} MZN por mês em serviços recorrentes.`,
+      text: `Subscrições: cerca de ${formatMZN(subsMensal)} MZN por ${pw} em serviços recorrentes.`,
     });
   }
 
@@ -388,19 +371,19 @@ function computeAnalysis(
   if (top && top.value > 0) {
     suggestions.push({
       tone: "info",
-      text: `Onde mais gastas: ${top.name} (${formatMZN(top.value)} MZN, ${top.pct}% do mês).`,
+      text: `Onde mais gastas: ${top.name} (${formatMZN(top.value)} MZN, ${top.pct}% do ${pw}).`,
     });
   }
 
   if (entradas > 0 && taxaPoupanca >= 20) {
     suggestions.push({
       tone: "good",
-      text: `Boa! Poupaste ${taxaPoupanca}% do que entrou este mês. Continua assim.`,
+      text: `Boa! Poupaste ${taxaPoupanca}% do que entrou este ${pw}. Continua assim.`,
     });
   } else if (poupanca < 0) {
     suggestions.push({
       tone: "bad",
-      text: `Atenção: gastaste ${formatMZN(Math.abs(poupanca))} MZN a mais do que entrou este mês.`,
+      text: `Atenção: gastaste ${formatMZN(Math.abs(poupanca))} MZN a mais do que entrou este ${pw}.`,
     });
   }
 
@@ -431,7 +414,7 @@ function computeAnalysis(
     if (biggestJump) {
       suggestions.push({
         tone: "bad",
-        text: `${biggestJump.name} subiu ${biggestJump.pct}% face ao mês passado.`,
+        text: `${biggestJump.name} subiu ${biggestJump.pct}% face ao ${pw} passado.`,
       });
     }
   }
@@ -498,29 +481,45 @@ function DrillList({ txs }: { txs: DrillTx[] }) {
 // ─── Página ─────────────────────────────────────────────────────────────────
 
 export default function AnalisePage() {
-  const latestOffset = useLatestMonthOffset();
-  const effectiveOffset = latestOffset ?? 0;
+  const [startDay, setStartDay] = useCycleStartDay();
+  const latestDate = useLatestTransactionDate();
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !o[id] }));
 
-  // Janela ampla (12 meses) ancorada no mês com dados mais recentes,
-  // para conseguir detectar recorrências e médias mensais.
+  // Palavra do período: "mês" no calendário normal (dia 1), "ciclo" quando ela
+  // desloca o início (ex: salário no dia 20). Mantém o texto igual ao anterior
+  // para quem não muda nada.
+  const periodWord = startDay === 1 ? "mês" : "ciclo";
+  const periodPlural = startDay === 1 ? "meses" : "ciclos";
+
+  // Âncora = data da transação mais recente (mas nunca no futuro). Serve para
+  // saber em que ciclo abrir a análise.
+  const anchorISO = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return latestDate && latestDate <= today ? latestDate : today;
+  }, [latestDate]);
+
+  const currentKey = useMemo(
+    () => currentCycleStart(anchorISO, startDay),
+    [anchorISO, startDay]
+  );
+  const prevKey = useMemo(() => shiftCycle(currentKey, -1), [currentKey]);
+  const currentLabel = useMemo(() => cycleLabel(currentKey, startDay, true), [currentKey, startDay]);
+  const prevLabel = useMemo(() => cycleLabel(prevKey, startDay, true), [prevKey, startDay]);
+
+  // Janela ampla (12 ciclos) ancorada no ciclo actual, para detectar
+  // recorrências e medianas por ciclo.
   const { from, to } = useMemo(() => {
-    const start = monthBounds(effectiveOffset - (WINDOW_MONTHS - 1));
-    const end = monthBounds(effectiveOffset);
-    return { from: start.from, to: end.to };
-  }, [effectiveOffset]);
+    const start = shiftCycle(currentKey, -(WINDOW_MONTHS - 1));
+    const end = cycleRangeFor(currentKey, startDay).to;
+    return { from: start, to: end };
+  }, [currentKey, startDay]);
 
   const { data: transactions, loading } = useTransactions({ from, to, limit: 5000 });
 
-  const currentKey = useMemo(() => monthKeyForOffset(effectiveOffset), [effectiveOffset]);
-  const prevKey = useMemo(() => monthKeyForOffset(effectiveOffset - 1), [effectiveOffset]);
-  const currentLabel = useMemo(() => monthLabelForOffset(effectiveOffset), [effectiveOffset]);
-  const prevLabel = useMemo(() => monthLabelForOffset(effectiveOffset - 1), [effectiveOffset]);
-
   const analysis = useMemo(
-    () => computeAnalysis(transactions ?? [], currentKey, prevKey, currentLabel, prevLabel),
-    [transactions, currentKey, prevKey, currentLabel, prevLabel]
+    () => computeAnalysis(transactions ?? [], currentKey, prevKey, currentLabel, prevLabel, startDay),
+    [transactions, currentKey, prevKey, currentLabel, prevLabel, startDay]
   );
 
   const trendMax = Math.max(...analysis.trend.map((t) => t.total), 1);
@@ -537,6 +536,8 @@ export default function AnalisePage() {
       </header>
 
       <main className="px-1 pt-5 space-y-5">
+        <CicloSettings startDay={startDay} onChange={setStartDay} />
+
         {loading ? (
           <div className="space-y-4">
             <div className="h-32 bg-white/5 rounded-2xl animate-pulse" />
@@ -549,7 +550,7 @@ export default function AnalisePage() {
             <p className="text-sm text-gray-200 mb-1 font-semibold">Ainda sem dados para analisar</p>
             <p className="text-xs text-gray-400 mb-5">
               Importa as tuas transa&ccedil;&otilde;es e a BUDGY mostra-te para onde vai o dinheiro,
-              as tuas despesas fixas e uma previs&atilde;o do pr&oacute;ximo m&ecirc;s.
+              as tuas despesas fixas e uma previs&atilde;o do pr&oacute;ximo {periodWord}.
             </p>
             <Link
               href="/importar"
@@ -574,7 +575,7 @@ export default function AnalisePage() {
                 {analysis.entradasDelta !== null && (
                   <p className="text-2xs text-gray-500 mt-0.5">
                     {analysis.entradasDelta >= 0 ? "+" : ""}
-                    {analysis.entradasDelta}% vs m&ecirc;s ant.
+                    {analysis.entradasDelta}% vs {periodWord} ant.
                   </p>
                 )}
               </div>
@@ -590,7 +591,7 @@ export default function AnalisePage() {
                 {analysis.saidasDelta !== null && (
                   <p className="text-2xs text-gray-500 mt-0.5">
                     {analysis.saidasDelta >= 0 ? "+" : ""}
-                    {analysis.saidasDelta}% vs m&ecirc;s ant.
+                    {analysis.saidasDelta}% vs {periodWord} ant.
                   </p>
                 )}
               </div>
@@ -608,7 +609,7 @@ export default function AnalisePage() {
                       />
                     </div>
                     <div>
-                      <p className="text-xs text-gray-400">Poupan&ccedil;a este m&ecirc;s</p>
+                      <p className="text-xs text-gray-400">Poupan&ccedil;a este {periodWord}</p>
                       <p
                         className={`text-lg font-bold ${
                           analysis.poupanca >= 0 ? "text-emerald-400" : "text-red-400"
@@ -637,16 +638,16 @@ export default function AnalisePage() {
             <section className="card p-5 border-l-4 border-l-emerald-500">
               <div className="flex items-center gap-2 mb-2">
                 <CalendarClock className="w-4 h-4 text-emerald-400" />
-                <h2 className="font-bold text-sm text-gray-100">Previs&atilde;o do pr&oacute;ximo m&ecirc;s</h2>
+                <h2 className="font-bold text-sm text-gray-100">Previs&atilde;o do pr&oacute;ximo {periodWord}</h2>
               </div>
               <p className="text-2xl font-bold text-gray-100">
                 &asymp; {formatMZN(analysis.previsao)} <span className="text-sm font-medium text-gray-400">MZN</span>
               </p>
               <p className="text-xs text-gray-400 mt-1.5">
-                Se manteres os h&aacute;bitos, o pr&oacute;ximo m&ecirc;s deve rondar este valor.
+                Se manteres os h&aacute;bitos, o pr&oacute;ximo {periodWord} deve rondar este valor.
                 <br />
                 <span className="text-2xs text-gray-500">
-                  Fixo {formatMZN(analysis.totalFixo)} + vari&aacute;vel {formatMZN(analysis.variavelMensal)} (mediana mensal, sem gastos pontuais). Estimativa.
+                  Fixo {formatMZN(analysis.totalFixo)} + vari&aacute;vel {formatMZN(analysis.variavelMensal)} (mediana por {periodWord}, sem gastos pontuais). Estimativa.
                 </span>
               </p>
             </section>
@@ -658,7 +659,7 @@ export default function AnalisePage() {
                   <BarChart3 className="w-4 h-4 text-emerald-400" />
                   <div>
                     <h2 className="font-bold text-sm text-gray-100">Tend&ecirc;ncia</h2>
-                    <p className="text-xs text-gray-400">Gasto total por m&ecirc;s</p>
+                    <p className="text-xs text-gray-400">Gasto total por {periodWord}</p>
                   </div>
                 </div>
                 <div className="space-y-2.5">
@@ -719,7 +720,7 @@ export default function AnalisePage() {
               ) : (
                 <>
                   <div className="flex items-baseline justify-between mb-3 pb-3 border-b border-white/10">
-                    <span className="text-xs text-gray-400">Total fixo / m&ecirc;s</span>
+                    <span className="text-xs text-gray-400">Total fixo / {periodWord}</span>
                     <span className="text-lg font-bold text-emerald-400">
                       {formatMZN(analysis.totalFixo)} MZN
                     </span>
@@ -742,7 +743,7 @@ export default function AnalisePage() {
                                 {r.label.toLowerCase()}
                               </p>
                               <p className="text-2xs text-gray-500">
-                                {r.category} &middot; {r.months} meses
+                                {r.category} &middot; {r.months} {periodPlural}
                               </p>
                             </div>
                             <span className="text-sm font-bold text-gray-100 flex-shrink-0">
@@ -794,7 +795,7 @@ export default function AnalisePage() {
                               {r.label.toLowerCase()}
                             </p>
                             <p className="text-2xs text-gray-500">
-                              {r.category} &middot; {r.months} meses &middot; ~{formatMZN(r.monthly)}/m&ecirc;s
+                              {r.category} &middot; {r.months} {periodPlural} &middot; ~{formatMZN(r.monthly)}/{periodWord}
                             </p>
                             {r.isAggregator && (
                               <p className="text-2xs text-amber-500/80 mt-0.5">
@@ -820,12 +821,12 @@ export default function AnalisePage() {
                 <Wallet className="w-4 h-4 text-emerald-400" />
                 <div>
                   <h2 className="font-bold text-sm text-gray-100">Para onde vai o dinheiro</h2>
-                  <p className="text-xs text-gray-400">Top categorias deste m&ecirc;s &middot; toca para ver</p>
+                  <p className="text-xs text-gray-400">Top categorias deste {periodWord} &middot; toca para ver</p>
                 </div>
               </div>
 
               {analysis.topCategories.length === 0 ? (
-                <p className="text-xs text-gray-500 py-4 text-center">Sem despesas este m&ecirc;s.</p>
+                <p className="text-xs text-gray-500 py-4 text-center">Sem despesas este {periodWord}.</p>
               ) : (
                 <div className="space-y-1">
                   {analysis.topCategories.slice(0, 6).map((c, i) => {
