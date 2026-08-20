@@ -248,8 +248,22 @@ export function parseCPCStatement(csvContent: string): ImportResult {
       type = "income";
     }
 
-    // Detect transfers between own accounts
-    if (/Transf(?:erencia)?\s+Interb/i.test(descriptionRaw) || /Transferencia\s+Intrab/i.test(descriptionRaw)) {
+    // Detect transfers between the user's OWN accounts (CPC → Moza/Standard).
+    // These move money between her own pockets — not income, not spending.
+    //  - "Transf ... Interb/Intrab"      → interbank between own accounts
+    //  - "Transf. Conta a Conta"          → same-bank move (incl. the big BALCAO
+    //                                       pass-throughs and card provisioning)
+    //  - "Transf. METIX via NIB Enviada"  → own-account move ONLY when nothing
+    //                                       follows "Enviada". When a beneficiary
+    //                                       name follows (IB-...-Creche/Adao/...)
+    //                                       it is a real payment → stays expense.
+    const metixBeneficiary = /Transf\.?\s+METIX\s+via\s+NIB\s+Enviada\s*(\S.*)?$/i.exec(descriptionRaw);
+    if (
+      /Transf(?:erencia)?\s+Interb/i.test(descriptionRaw) ||
+      /Transferencia\s+Intrab/i.test(descriptionRaw) ||
+      /Transf\.?\s+Conta a Conta/i.test(descriptionRaw) ||
+      (metixBeneficiary !== null && !metixBeneficiary[1])
+    ) {
       type = "transfer";
     }
 
@@ -269,9 +283,10 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     else if (/Comissao Trf/i.test(descriptionRaw)) mappedCategory = "Taxas Bancárias";
     else if (/DIVIDENDOS/i.test(descriptionRaw)) mappedCategory = "Rendimento Passivo";
     else if (/Regularizacao ATM/i.test(descriptionRaw)) mappedCategory = "Reembolso";
-    else if (/Transf.+MINHA CONTA/i.test(descriptionRaw)) mappedCategory = "Transferência";
-    else if (/Transf.+Creche/i.test(descriptionRaw)) mappedCategory = "Família";
-    else if (/Transf.+Breno|Transf.+Nazira|Transf.+Adao/i.test(descriptionRaw)) mappedCategory = "Família";
+    else if (/MINHA CONTA/i.test(descriptionRaw) || (type === "transfer" && /METIX|Conta a Conta/i.test(descriptionRaw))) mappedCategory = "Transferência";
+    else if (/Creche|CENTR\w*\s*INFANTIL|PIKINICO|Col[eé]gio|Escola/i.test(descriptionRaw)) mappedCategory = "Educação";
+    else if (/Adao\s+Baptista/i.test(descriptionRaw)) mappedCategory = "Compras";
+    else if (/Transf.+Breno|Transf.+Nazira/i.test(descriptionRaw)) mappedCategory = "Família";
     else if (/Anuidade.*cart[aã]o|Imposto de selo/i.test(descriptionRaw)) mappedCategory = "Taxas Bancárias";
 
     // Track stats
