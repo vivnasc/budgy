@@ -16,6 +16,7 @@ import {
   Settings,
   MessageSquareText,
   Sparkles,
+  HandHeart,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -52,6 +53,7 @@ const NAV_ITEMS = [
 ];
 
 const MORE_MENU_ITEMS = [
+  { label: "Parceiro", icon: HandHeart, href: "/parceiro", color: "bg-emerald-500" },
   { label: "Análise", icon: Sparkles, href: "/analise", color: "bg-emerald-500" },
   { label: "Importar", icon: MessageSquareText, href: "/importar", color: "bg-emerald-600" },
   { label: "Metas", icon: Target, href: "/metas", color: "bg-emerald-500" },
