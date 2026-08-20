@@ -644,6 +644,28 @@ export async function parseExcelFile(
       return emptyResult("Ficheiro Excel vazio");
     }
 
+    // Deteção pelo CONTEÚDO — o nome do ficheiro pode enganar (ex.: um extrato
+    // Standard Bank exportado como "Movimentos_de_Conta_...xlsx" não tem
+    // "standard" no nome e cairia por engano no leitor do Mobills).
+    {
+      const sniffWs = workbook.Sheets[firstSheetName];
+      if (sniffWs) {
+        const sniff = XLSX.utils.sheet_to_csv(sniffWs, { FS: "," });
+        if (
+          /standard bank/i.test(sniff) ||
+          (/d[eé]bito/i.test(sniff) &&
+            /cr[eé]dito/i.test(sniff) &&
+            /saldo/i.test(sniff) &&
+            !/categoria/i.test(sniff))
+        ) {
+          format = "standard-bank";
+        } else {
+          const sniffed = detectBankFormat(sniff);
+          if (sniffed === "cpc" || sniffed === "moza") format = sniffed;
+        }
+      }
+    }
+
     if (format === "mobills") {
       // The Mobills Excel export typically has 4 sheets:
       //   "Receitas e Despesas" — combined view (income + expenses)
@@ -876,8 +898,10 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
       lastBalanceDate = date;
     }
 
-    const debit = parseFlexibleAmount(row.debit ?? "");
-    const credit = parseFlexibleAmount(row.credit ?? "");
+    // O Standard Bank exporta os débitos com sinal negativo (ex.: "-686,26") e
+    // os créditos positivos. Usamos o valor absoluto — a direcção fica no tipo.
+    const debit = Math.abs(parseFlexibleAmount(row.debit ?? ""));
+    const credit = Math.abs(parseFlexibleAmount(row.credit ?? ""));
     const singleAmount = parseFlexibleAmount(row.amount ?? "");
 
     const amount = credit > 0 ? credit : debit > 0 ? debit : Math.abs(singleAmount);
