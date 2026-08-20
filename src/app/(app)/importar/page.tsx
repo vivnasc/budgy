@@ -799,7 +799,7 @@ function PendingTransactionCard({
         <div className="text-right">
           <p className={`text-lg font-bold ${tx.type === "income" ? "text-emerald-600" : tx.type === "expense" ? "text-gray-900" : "text-blue-600"}`}>
             {tx.type === "income" ? "+" : tx.type === "expense" ? "-" : ""}
-            {tx.amount.toLocaleString("pt-MZ")} {tx.currency}
+            {Math.abs(tx.amount).toLocaleString("pt-MZ")} {tx.currency}
           </p>
         </div>
       </div>
@@ -1228,7 +1228,7 @@ function ImportPreview({
           </div>
           <div className="bg-blue-50 rounded-xl p-3 text-center">
             <div className="text-sm font-bold text-blue-700">
-              {result.summary.totalTransfers.toLocaleString("pt-MZ")}
+              {Math.abs(result.summary.totalTransfers).toLocaleString("pt-MZ")}
             </div>
             <div className="text-[10px] text-blue-600 mt-1">Transferências</div>
           </div>
