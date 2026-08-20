@@ -91,6 +91,8 @@ function defaultCategoryForType(
 function needsConfirmation(tx: PendingTransaction): boolean {
   // Uma contrapartida reconhecida já está resolvida — não é algo a confirmar.
   if (tx.counterpart === true) return false;
+  // Algo que a utilizadora já ensinou (texto+valor) não precisa de reconfirmação.
+  if (tx.learned === true) return false;
   return (
     tx.type === "transfer" ||
     (tx.type === "income" && tx.category !== "Salário") ||
@@ -479,7 +481,7 @@ function SMSTab() {
       prev.map((tx) => {
         if (tx.id !== id) return tx;
         // Aprovar com os valores mostrados ensina a app
-        rememberDecision(tx.description, { type: tx.type, category: tx.category });
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category: tx.category });
         return { ...tx, status: "approved" as const };
       })
     );
@@ -495,7 +497,7 @@ function SMSTab() {
     setPendingTransactions((prev) =>
       prev.map((tx) => {
         if (tx.id !== id) return tx;
-        rememberDecision(tx.description, { type: tx.type, category });
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category });
         return { ...tx, category, status: "pending" as const };
       })
     );
@@ -506,7 +508,7 @@ function SMSTab() {
       prev.map((tx) => {
         if (tx.id !== id) return tx;
         const category = defaultCategoryForType(type, tx.category);
-        rememberDecision(tx.description, { type, category });
+        rememberDecision(tx.description, tx.amount, { type, category });
         return { ...tx, type, category, status: "pending" as const };
       })
     );
@@ -1093,7 +1095,7 @@ function ImportPreview({
     setPending((prev) =>
       prev.map((tx) => {
         if (tx.id !== id) return tx;
-        rememberDecision(tx.description, { type: tx.type, category: tx.category });
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category: tx.category });
         return { ...tx, status: "approved" as const };
       })
     );
@@ -1109,7 +1111,7 @@ function ImportPreview({
     setPending((prev) =>
       prev.map((tx) => {
         if (tx.id !== id) return tx;
-        rememberDecision(tx.description, { type: tx.type, category });
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category });
         return { ...tx, category, status: "pending" as const };
       })
     );
@@ -1120,7 +1122,7 @@ function ImportPreview({
       prev.map((tx) => {
         if (tx.id !== id) return tx;
         const category = defaultCategoryForType(type, tx.category);
-        rememberDecision(tx.description, { type, category });
+        rememberDecision(tx.description, tx.amount, { type, category });
         return { ...tx, type, category, status: "pending" as const };
       })
     );
