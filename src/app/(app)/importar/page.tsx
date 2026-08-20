@@ -17,8 +17,20 @@ import {
   CheckCircle2,
   XCircle,
   RefreshCw,
+  Download,
+  ShieldCheck,
+  RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
+import { createBrowserClient } from "@/lib/auth/client";
+import { useUser } from "@/lib/auth/hooks";
+import {
+  gatherBackup,
+  downloadBackup,
+  parseBackup,
+  restoreBackup,
+  type BudgyBackup,
+} from "@/lib/backup";
 import type { ParsedSMS } from "@/lib/sms-parser";
 import type { ImportResult } from "@/lib/mobills-import";
 import { generateImportPDF } from "@/lib/import-pdf";
@@ -214,7 +226,191 @@ export default function ImportarPage() {
       {/* Content */}
       <div className="px-4 py-6">
         {activeTab === "sms" ? <SMSTab /> : <ImportTab />}
+        <BackupRestoreSection />
         <ResetDataSection />
+      </div>
+    </div>
+  );
+}
+
+// ─── Backup / Restauro Section ───────────────────────────────────────────────
+
+function BackupRestoreSection() {
+  const { user } = useUser();
+
+  // Export
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState<{ transactions: number; accounts: number } | null>(null);
+  const [exportErr, setExportErr] = useState<string | null>(null);
+
+  // Restore
+  const restoreInputRef = useRef<HTMLInputElement>(null);
+  const [pendingBackup, setPendingBackup] = useState<BudgyBackup | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreResult, setRestoreResult] = useState<{ restored: number; duplicates: number } | null>(null);
+  const [restoreErr, setRestoreErr] = useState<string | null>(null);
+
+  const handleDownload = async () => {
+    setExporting(true);
+    setExportErr(null);
+    setExported(null);
+    try {
+      const supabase = createBrowserClient();
+      if (!user) {
+        setExportErr("Precisas de ter sessão iniciada.");
+        return;
+      }
+      const backup = await gatherBackup(supabase, user.id);
+      downloadBackup(backup);
+      setExported({ transactions: backup.transactions.length, accounts: backup.accounts.length });
+    } catch (e) {
+      setExportErr(e instanceof Error ? e.message : "Erro ao gerar o backup.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleFilePicked = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (restoreInputRef.current) restoreInputRef.current.value = "";
+    if (!file) return;
+
+    setRestoreErr(null);
+    setRestoreResult(null);
+    setPendingBackup(null);
+    try {
+      const text = await file.text();
+      const backup = parseBackup(text);
+      setPendingBackup(backup);
+    } catch (e) {
+      setRestoreErr(e instanceof Error ? e.message : "Ficheiro inválido.");
+    }
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!pendingBackup) return;
+    setRestoring(true);
+    setRestoreErr(null);
+    try {
+      const result = await restoreBackup(pendingBackup);
+      setRestoreResult(result);
+      setPendingBackup(null);
+      // Recarrega para o painel reflectir os dados restaurados.
+      setTimeout(() => window.location.reload(), 1800);
+    } catch (e) {
+      setRestoreErr(e instanceof Error ? e.message : "Erro de rede ao restaurar.");
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  return (
+    <div className="mt-10 pt-6 border-t border-gray-100 space-y-4">
+      <div className="bg-emerald-50 rounded-2xl border border-emerald-100 p-4">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-emerald-900">Cópia de segurança</h3>
+            <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+              Antes de importares histórico, descarrega uma cópia de tudo. Se algo correr mal,
+              restauras em segundos. Guarda este ficheiro num sítio seguro.
+            </p>
+
+            {/* Descarregar backup */}
+            <div className="mt-4">
+              {exported ? (
+                <p className="text-xs text-emerald-800 font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Backup descarregado — {exported.transactions} transações, {exported.accounts} contas.
+                </p>
+              ) : (
+                <button
+                  onClick={handleDownload}
+                  disabled={exporting}
+                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                >
+                  {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  {exporting ? "A preparar backup..." : "Descarregar backup"}
+                </button>
+              )}
+              {exported && (
+                <button
+                  onClick={handleDownload}
+                  disabled={exporting}
+                  className="mt-3 block text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline disabled:opacity-50"
+                >
+                  Descarregar outra vez
+                </button>
+              )}
+              {exportErr && <p className="text-xs text-red-700 mt-2">{exportErr}</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Restaurar de um backup */}
+      <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4">
+        <div className="flex items-start gap-3">
+          <RotateCcw className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-blue-900">Restaurar de um backup</h3>
+            <p className="text-xs text-blue-700 mt-1 leading-relaxed">
+              Carrega um ficheiro <span className="font-mono">.json</span> do BUDGY. O restauro
+              <strong> ACRESCENTA o que falta, não apaga nada</strong> — graças à deteção de duplicados.
+            </p>
+
+            <input
+              ref={restoreInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={handleFilePicked}
+              className="hidden"
+            />
+
+            {restoreResult ? (
+              <p className="text-xs text-emerald-800 font-semibold mt-4 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                {restoreResult.restored} restauradas, {restoreResult.duplicates} já existiam. A recarregar...
+              </p>
+            ) : pendingBackup ? (
+              <div className="mt-4 rounded-xl bg-white border border-blue-100 p-3">
+                <p className="text-xs text-blue-900 font-semibold">
+                  {pendingBackup.transactions.length} transações, {pendingBackup.accounts.length} contas
+                  {pendingBackup.exported_at
+                    ? ` (backup de ${pendingBackup.exported_at.split("T")[0]})`
+                    : ""}
+                  {" "}— restaurar?
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleConfirmRestore}
+                    disabled={restoring}
+                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                  >
+                    {restoring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    {restoring ? "A restaurar..." : "Sim, restaurar"}
+                  </button>
+                  <button
+                    onClick={() => setPendingBackup(null)}
+                    disabled={restoring}
+                    className="text-xs font-semibold bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => restoreInputRef.current?.click()}
+                className="mt-4 inline-flex items-center gap-2 bg-white text-blue-700 border border-blue-200 hover:bg-blue-100 px-4 py-2.5 rounded-xl text-sm font-semibold"
+              >
+                <Upload className="w-4 h-4" />
+                Escolher ficheiro de backup
+              </button>
+            )}
+            {restoreErr && <p className="text-xs text-red-700 mt-2">{restoreErr}</p>}
+          </div>
+        </div>
       </div>
     </div>
   );
