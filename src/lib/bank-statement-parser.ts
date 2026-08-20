@@ -14,7 +14,7 @@ import { autoCategorize } from "./auto-categorize";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type BankFormat = "cpc" | "moza" | "standard-bank" | "mobills" | "auto";
+export type BankFormat = "cpc" | "moza" | "standard-bank" | "mobills" | "mpesa" | "auto";
 
 export interface BankInfo {
   id: BankFormat;
@@ -59,6 +59,13 @@ export const SUPPORTED_BANK_FORMATS: BankInfo[] = [
     description: "Ficheiro Excel (.xlsx) do banco",
     fileTypes: [".xlsx"],
     icon: "building",
+  },
+  {
+    id: "mpesa",
+    name: "Extrato M-Pesa (PDF)",
+    description: "Extracto da Conta M-Pesa em PDF",
+    fileTypes: [".pdf"],
+    icon: "smartphone",
   },
 ];
 

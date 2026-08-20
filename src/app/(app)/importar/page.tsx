@@ -926,8 +926,24 @@ function ImportTab() {
     try {
       const filename = file.name.toLowerCase();
       const isExcel = filename.endsWith(".xlsx") || filename.endsWith(".xls");
+      const isPdf = filename.endsWith(".pdf");
 
-      if (isExcel) {
+      if (isPdf) {
+        // Extração do texto do PDF acontece no browser (pdfjs). O extrato
+        // M-Pesa não tem CSV — reconstruímos as linhas pelas coordenadas.
+        const { parseMpesaPdfFile } = await import("@/lib/mpesa-pdf-client");
+        const data = await parseMpesaPdfFile(file);
+        if (data.success) {
+          setImportResult(data);
+          setDetectedFormat("mpesa");
+          setStep("preview");
+        } else {
+          setError(
+            data.errors[0] ||
+              "PDF não reconhecido — de momento só extratos M-Pesa em PDF"
+          );
+        }
+      } else if (isExcel) {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("format", "auto");
@@ -1002,7 +1018,7 @@ function ImportTab() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.xlsx,.xls,.txt"
+              accept=".csv,.xlsx,.xls,.txt,.pdf"
               onChange={handleFileInput}
               className="hidden"
             />
@@ -1020,7 +1036,7 @@ function ImportTab() {
                   Arrasta aqui o ficheiro do banco
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  CSV ou Excel — CPC, Moza Banco, Standard Bank, Mobills
+                  CSV, Excel ou PDF (M-Pesa) — CPC, Moza Banco, Standard Bank, Mobills
                 </p>
                 <p className="text-xs text-gray-300 mt-0.5">
                   ou clica para escolher
@@ -1189,7 +1205,7 @@ function ImportPreview({
             <h3 className="text-sm font-bold text-gray-900">Resumo da importação</h3>
             {detectedFormat && detectedFormat !== "auto" && (
               <span className="text-[10px] font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full uppercase">
-                {detectedFormat === "cpc" ? "CSV (Inglês)" : detectedFormat === "moza" ? "CSV (Português)" : detectedFormat === "standard-bank" ? "Excel" : "App externa"}
+                {detectedFormat === "cpc" ? "CSV (Inglês)" : detectedFormat === "moza" ? "CSV (Português)" : detectedFormat === "standard-bank" ? "Excel" : detectedFormat === "mpesa" ? "PDF (M-Pesa)" : "App externa"}
               </span>
             )}
           </div>
