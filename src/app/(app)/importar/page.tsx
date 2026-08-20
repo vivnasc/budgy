@@ -25,6 +25,7 @@ import { generateImportPDF } from "@/lib/import-pdf";
 import { SUPPORTED_BANKS } from "@/lib/sms-parser";
 import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
 import { SUPPORTED_BANK_FORMATS, type BankFormat } from "@/lib/bank-statement-parser";
+import { applyLearnedRules, rememberDecision } from "@/lib/learned-rules";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,48 @@ interface PendingTransaction {
   accountHint?: string;
   confidence: number;
   status: "pending" | "approved" | "rejected" | "editing";
+  /** Preenchido automaticamente a partir de uma decisão aprendida. */
+  learned?: boolean;
+}
+
+// ─── Confirmação / categorias ────────────────────────────────────────────────
+
+/**
+ * Categorias válidas por tipo (reutiliza BUDGY_CATEGORIES — não inventar).
+ */
+function categoriesForType(type: PendingTransaction["type"]) {
+  return type === "income"
+    ? BUDGY_CATEGORIES.income
+    : type === "transfer"
+    ? BUDGY_CATEGORIES.transfer
+    : BUDGY_CATEGORIES.expense;
+}
+
+/**
+ * Categoria por defeito para um tipo: mantém a actual se ainda for válida,
+ * caso contrário usa a primeira categoria do grupo.
+ */
+function defaultCategoryForType(
+  type: PendingTransaction["type"],
+  current: string
+): string {
+  const cats = categoriesForType(type);
+  if (cats.some((c) => c.name === current)) return current;
+  return cats[0]?.name ?? "Outros";
+}
+
+/**
+ * Movimentos que a utilizadora provavelmente precisa de classificar à mão:
+ * transferências entre contas próprias, rendimentos que não sejam salário
+ * (empréstimo, dinheiro de alguém), não categorizados, ou valores grandes.
+ */
+function needsConfirmation(tx: PendingTransaction): boolean {
+  return (
+    tx.type === "transfer" ||
+    (tx.type === "income" && tx.category !== "Salário") ||
+    tx.category === "Outros" ||
+    Math.abs(tx.amount) >= 100000
+  );
 }
 
 // ─── Page Component ──────────────────────────────────────────────────────────
@@ -324,7 +367,9 @@ function SMSTab() {
             status: "pending" as const,
           })
         );
-        setPendingTransactions((prev) => [...newTransactions, ...prev]);
+        // Aplica decisões aprendidas antes de mostrar (a app lembra-se)
+        const learned = applyLearnedRules(newTransactions);
+        setPendingTransactions((prev) => [...learned, ...prev]);
       }
       // Handle single result
       else if (data.transaction) {
@@ -343,7 +388,8 @@ function SMSTab() {
           confidence: tx.confidence,
           status: "pending",
         };
-        setPendingTransactions((prev) => [newTx, ...prev]);
+        const [learnedTx] = applyLearnedRules([newTx]);
+        setPendingTransactions((prev) => [learnedTx ?? newTx, ...prev]);
       }
 
       setSmsText("");
@@ -356,7 +402,12 @@ function SMSTab() {
 
   const handleApprove = (id: string) => {
     setPendingTransactions((prev) =>
-      prev.map((tx) => (tx.id === id ? { ...tx, status: "approved" as const } : tx))
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        // Aprovar com os valores mostrados ensina a app
+        rememberDecision(tx.description, { type: tx.type, category: tx.category });
+        return { ...tx, status: "approved" as const };
+      })
     );
   };
 
@@ -368,9 +419,22 @@ function SMSTab() {
 
   const handleCategoryChange = (id: string, category: string) => {
     setPendingTransactions((prev) =>
-      prev.map((tx) =>
-        tx.id === id ? { ...tx, category, status: "pending" as const } : tx
-      )
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        rememberDecision(tx.description, { type: tx.type, category });
+        return { ...tx, category, status: "pending" as const };
+      })
+    );
+  };
+
+  const handleTypeChange = (id: string, type: PendingTransaction["type"]) => {
+    setPendingTransactions((prev) =>
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        const category = defaultCategoryForType(type, tx.category);
+        rememberDecision(tx.description, { type, category });
+        return { ...tx, type, category, status: "pending" as const };
+      })
     );
   };
 
@@ -388,6 +452,8 @@ function SMSTab() {
         currency: tx.currency,
         date: tx.date,
         description: tx.description,
+        category_name: tx.category,
+        ...(tx.accountHint ? { account: tx.accountHint } : {}),
         status: "completed",
       }));
 
@@ -505,35 +571,103 @@ function SMSTab() {
             )}
           </div>
 
-          <div className="space-y-3">
-            {pendingTransactions.map((tx) => (
-              <PendingTransactionCard
-                key={tx.id}
-                transaction={tx}
-                onApprove={() => handleApprove(tx.id)}
-                onReject={() => handleReject(tx.id)}
-                onCategoryChange={(cat) => handleCategoryChange(tx.id, cat)}
-              />
-            ))}
-          </div>
+          <PendingReviewList
+            transactions={pendingTransactions}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onCategoryChange={handleCategoryChange}
+            onTypeChange={handleTypeChange}
+          />
         </div>
       )}
     </div>
   );
 }
 
+// ─── Pending Review List (banner + filtro + cartões) ─────────────────────────
+
+function PendingReviewList({
+  transactions,
+  onApprove,
+  onReject,
+  onCategoryChange,
+  onTypeChange,
+}: {
+  transactions: PendingTransaction[];
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  onCategoryChange: (id: string, category: string) => void;
+  onTypeChange: (id: string, type: PendingTransaction["type"]) => void;
+}) {
+  const [onlyToConfirm, setOnlyToConfirm] = useState(false);
+
+  const toConfirm = transactions.filter(
+    (tx) => needsConfirmation(tx) && tx.status === "pending"
+  );
+  const visible = onlyToConfirm ? toConfirm : transactions;
+
+  return (
+    <div className="space-y-3">
+      {toConfirm.length > 0 && (
+        <div className="bg-amber-50 rounded-2xl border border-amber-200 p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-amber-900">
+                ⚠️ {toConfirm.length} movimento{toConfirm.length !== 1 ? "s" : ""} para confirmar
+              </p>
+              <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                Verifica se são gastos, transferências tuas ou empréstimos.
+              </p>
+              <button
+                onClick={() => setOnlyToConfirm((v) => !v)}
+                className={`mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  onlyToConfirm
+                    ? "bg-amber-600 text-white"
+                    : "bg-white text-amber-700 border border-amber-200 hover:bg-amber-100"
+                }`}
+              >
+                {onlyToConfirm ? "A mostrar só a confirmar" : "Mostrar só a confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {visible.map((tx) => (
+        <PendingTransactionCard
+          key={tx.id}
+          transaction={tx}
+          onApprove={() => onApprove(tx.id)}
+          onReject={() => onReject(tx.id)}
+          onCategoryChange={(cat) => onCategoryChange(tx.id, cat)}
+          onTypeChange={(type) => onTypeChange(tx.id, type)}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ─── Pending Transaction Card ────────────────────────────────────────────────
+
+const TYPE_OPTIONS: { value: PendingTransaction["type"]; label: string }[] = [
+  { value: "income", label: "Entrada" },
+  { value: "expense", label: "Saída" },
+  { value: "transfer", label: "Transferência" },
+];
 
 function PendingTransactionCard({
   transaction: tx,
   onApprove,
   onReject,
   onCategoryChange,
+  onTypeChange,
 }: {
   transaction: PendingTransaction;
   onApprove: () => void;
   onReject: () => void;
   onCategoryChange: (category: string) => void;
+  onTypeChange: (type: PendingTransaction["type"]) => void;
 }) {
   const [showCategories, setShowCategories] = useState(false);
 
@@ -556,22 +690,27 @@ function PendingTransactionCard({
     editing: "border-blue-200 bg-blue-50/30",
   };
 
-  const allCategories = tx.type === "income"
-    ? BUDGY_CATEGORIES.income
-    : tx.type === "transfer"
-    ? BUDGY_CATEGORIES.transfer
-    : BUDGY_CATEGORIES.expense;
+  // Movimentos a confirmar destacam-se (âmbar) enquanto pendentes.
+  const flagged = needsConfirmation(tx) && tx.status === "pending";
+  const cardStyle = flagged ? "border-amber-300 bg-amber-50/40" : statusStyles[tx.status];
+
+  const allCategories = categoriesForType(tx.type);
 
   return (
-    <div className={`rounded-2xl border p-4 transition-all ${statusStyles[tx.status]}`}>
+    <div className={`rounded-2xl border p-4 transition-all ${cardStyle}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${typeColors[tx.type]}`}>
               {typeLabels[tx.type]}
             </span>
             <span className="text-[10px] text-gray-400">{tx.source}</span>
+            {tx.learned && (
+              <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                ✓ Aprendido
+              </span>
+            )}
             {tx.confidence >= 0.8 && (
               <span className="text-[10px] text-emerald-500 font-medium">Alta confiança</span>
             )}
@@ -588,6 +727,25 @@ function PendingTransactionCard({
           </p>
         </div>
       </div>
+
+      {/* Type toggle */}
+      {tx.status !== "rejected" && (
+        <div className="flex gap-1.5 mb-3">
+          {TYPE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => onTypeChange(opt.value)}
+              className={`flex-1 text-xs font-semibold py-1.5 rounded-lg transition-colors ${
+                tx.type === opt.value
+                  ? "bg-emerald-500 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Category */}
       <div className="flex items-center gap-2 mb-3">
@@ -824,23 +982,87 @@ function ImportPreview({
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleSaveToDatabase = async () => {
-    setSaving(true);
-    setSaveError(null);
-
-    try {
-      const transactions = result.imported.map((tx) => ({
+  // Lista editável de movimentos (com decisões aprendidas já aplicadas).
+  const [pending, setPending] = useState<PendingTransaction[]>(() =>
+    applyLearnedRules(
+      result.imported.map((tx, i) => ({
+        id: `imp-${i}`,
+        source: detectedFormat && detectedFormat !== "auto" ? detectedFormat : "Extrato",
         type: tx.type,
         amount: tx.amount,
         currency: "MZN",
         date: tx.date,
         description: tx.description,
-        account: tx.account,
-        transfer_to_account: tx.transferToAccount,
-        category_name: tx.mappedCategory,
-        tags: tx.tags,
-        status: tx.status,
-      }));
+        category: tx.mappedCategory,
+        suggestedCategory: tx.mappedCategory,
+        accountHint: tx.account,
+        confidence: tx.needsReview ? 0.5 : 0.9,
+        status: "pending" as const,
+      }))
+    )
+  );
+
+  const handleApprove = (id: string) => {
+    setPending((prev) =>
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        rememberDecision(tx.description, { type: tx.type, category: tx.category });
+        return { ...tx, status: "approved" as const };
+      })
+    );
+  };
+
+  const handleReject = (id: string) => {
+    setPending((prev) =>
+      prev.map((tx) => (tx.id === id ? { ...tx, status: "rejected" as const } : tx))
+    );
+  };
+
+  const handleCategoryChange = (id: string, category: string) => {
+    setPending((prev) =>
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        rememberDecision(tx.description, { type: tx.type, category });
+        return { ...tx, category, status: "pending" as const };
+      })
+    );
+  };
+
+  const handleTypeChange = (id: string, type: PendingTransaction["type"]) => {
+    setPending((prev) =>
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        const category = defaultCategoryForType(type, tx.category);
+        rememberDecision(tx.description, { type, category });
+        return { ...tx, type, category, status: "pending" as const };
+      })
+    );
+  };
+
+  // Guardamos tudo o que não foi rejeitado (as edições sobrepõem-se ao original).
+  const toSave = pending.filter((tx) => tx.status !== "rejected");
+
+  const handleSaveToDatabase = async () => {
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const transactions = toSave.map((tx) => {
+        const idx = Number(tx.id.slice(4));
+        const orig = result.imported[idx];
+        return {
+          type: tx.type,
+          amount: tx.amount,
+          currency: "MZN",
+          date: tx.date,
+          description: tx.description,
+          account: tx.accountHint,
+          transfer_to_account: orig?.transferToAccount,
+          category_name: tx.category,
+          tags: orig?.tags,
+          status: orig?.status,
+        };
+      });
 
       const response = await fetch("/api/transactions", {
         method: "POST",
@@ -1053,17 +1275,31 @@ function ImportPreview({
         </div>
       )}
 
+      {/* Rever transações — detectar, questionar e aprender */}
+      {!saved && pending.length > 0 && (
+        <div>
+          <h3 className="text-sm font-bold text-gray-900 mb-3">Rever transações</h3>
+          <PendingReviewList
+            transactions={pending}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onCategoryChange={handleCategoryChange}
+            onTypeChange={handleTypeChange}
+          />
+        </div>
+      )}
+
       {/* Import Button */}
       {saved ? (
         <div className="w-full flex items-center justify-center gap-3 bg-emerald-100 text-emerald-700 font-semibold py-4 rounded-2xl">
           <CheckCircle2 className="w-5 h-5" />
-          {result.imported.length} transações importadas com sucesso!
+          {toSave.length} transações importadas com sucesso!
         </div>
       ) : (
         <button
           className="w-full flex items-center justify-center gap-3 bg-emerald-500 text-white font-semibold py-4 rounded-2xl hover:bg-emerald-600 disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/20"
           onClick={handleSaveToDatabase}
-          disabled={saving}
+          disabled={saving || toSave.length === 0}
         >
           {saving ? (
             <>
@@ -1073,7 +1309,7 @@ function ImportPreview({
           ) : (
             <>
               <Check className="w-5 h-5" />
-              Importar {result.imported.length} transações
+              Importar {toSave.length} transações
             </>
           )}
         </button>
