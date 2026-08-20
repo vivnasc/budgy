@@ -251,17 +251,19 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     // Detect transfers between the user's OWN accounts (CPC → Moza/Standard).
     // These move money between her own pockets — not income, not spending.
     //  - "Transf ... Interb/Intrab"      → interbank between own accounts
-    //  - "Transf. Conta a Conta"          → same-bank move (incl. the big BALCAO
-    //                                       pass-throughs and card provisioning)
     //  - "Transf. METIX via NIB Enviada"  → own-account move ONLY when nothing
     //                                       follows "Enviada". When a beneficiary
     //                                       name follows (IB-...-Creche/Adao/...)
     //                                       it is a real payment → stays expense.
+    //
+    // NOTE: "Transf. Conta a Conta - BALCAO" is intentionally NOT auto-tagged as
+    // a transfer. It's a generic counter transfer that can just as easily be a
+    // real payment to a third party (e.g. paying a builder for house works), so
+    // we leave it as an expense by default and let the user confirm/relabel it.
     const metixBeneficiary = /Transf\.?\s+METIX\s+via\s+NIB\s+Enviada\s*(\S.*)?$/i.exec(descriptionRaw);
     if (
       /Transf(?:erencia)?\s+Interb/i.test(descriptionRaw) ||
       /Transferencia\s+Intrab/i.test(descriptionRaw) ||
-      /Transf\.?\s+Conta a Conta/i.test(descriptionRaw) ||
       (metixBeneficiary !== null && !metixBeneficiary[1])
     ) {
       type = "transfer";
