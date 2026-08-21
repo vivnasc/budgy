@@ -156,7 +156,7 @@ export function rebuildMobillsResult(
     categoryCounts[tx.mappedCategory] = (categoryCounts[tx.mappedCategory] ?? 0) + 1;
     if (tx.type === "income") totalIncome += tx.amount;
     else if (tx.type === "expense") totalExpenses += tx.amount;
-    else totalTransfers += tx.amount;
+    else totalTransfers += Math.abs(tx.amount);
     if (!minDate || tx.date < minDate) minDate = tx.date;
     if (!maxDate || tx.date > maxDate) maxDate = tx.date;
   }

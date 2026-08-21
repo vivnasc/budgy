@@ -928,7 +928,11 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       }
 
       const type = row.type ? parseTransactionType(row.type) : (rawAmount < 0 ? "expense" : "income");
-      const amount = Math.abs(rawAmount);
+      // Receita/despesa guardam magnitude positiva. Transferências guardam valor
+      // COM SINAL: preservamos o sinal original (saída = negativo, entrada =
+      // positivo) para que uma transferência recebida some ao saldo da conta.
+      const magnitude = Math.abs(rawAmount);
+      const amount = type === "transfer" ? (rawAmount < 0 ? -magnitude : magnitude) : magnitude;
 
       // Determine status:
       //   1. Honour the Mobills "Status" column if it is present and unambiguous
@@ -975,10 +979,10 @@ export function parseMobillsCSV(csvContent: string): ImportResult {
       if (!minDate || date < minDate) minDate = date;
       if (!maxDate || date > maxDate) maxDate = date;
 
-      // Track totals
+      // Track totals — o resumo soma sempre a magnitude (para o ecrã).
       if (type === "income") totalIncome += amount;
       else if (type === "expense") totalExpenses += amount;
-      else totalTransfers += amount;
+      else totalTransfers += magnitude;
 
       // Track category counts
       categoryCounts[mapped] = (categoryCounts[mapped] || 0) + 1;
