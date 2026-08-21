@@ -47,6 +47,59 @@ export function clearAnthropicKey(): void {
   }
 }
 
+// ─── Histórico da conversa (persistido no browser) ───────────────────────────
+
+export const PARCEIRO_HISTORY_STORAGE = "budgy-parceiro-history";
+
+export interface StoredMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** Lê o histórico guardado. Tolera storage ausente/corrompido. SSR-safe. */
+export function loadParceiroHistory(): StoredMessage[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PARCEIRO_HISTORY_STORAGE);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (m): m is StoredMessage =>
+          m &&
+          (m.role === "user" || m.role === "assistant") &&
+          typeof m.content === "string"
+      )
+      .map((m) => ({ role: m.role, content: m.content }));
+  } catch {
+    return [];
+  }
+}
+
+/** Guarda o histórico. Silencioso se o storage não estiver disponível. */
+export function saveParceiroHistory(messages: StoredMessage[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      PARCEIRO_HISTORY_STORAGE,
+      JSON.stringify(messages.map((m) => ({ role: m.role, content: m.content })))
+    );
+  } catch {
+    /* ignora — storage indisponível/cheio */
+  }
+}
+
+/** Apaga o histórico guardado. */
+export function clearParceiroHistory(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PARCEIRO_HISTORY_STORAGE);
+  } catch {
+    /* ignora */
+  }
+}
+
 /** Mostra a chave mascarada (ex: "sk-ant-…a1b2"). Nunca revela o meio. */
 export function maskKey(key: string): string {
   const trimmed = key.trim();
@@ -320,9 +373,133 @@ export interface ChatMessage {
   content: string;
 }
 
+function buildSystemWithData(context: FinancialContext): string {
+  return `${PARCEIRO_SYSTEM}
+
+DADOS FINANCEIROS REAIS DA VIVIANNE (JSON, valores em MZN):
+${JSON.stringify(context)}`;
+}
+
+/** Traduz um estado HTTP + erro da Anthropic numa mensagem amigável em pt-MZ. */
+function friendlyUpstreamError(status: number, type: string, message?: string): string {
+  if (status === 401 || type === "authentication_error") {
+    return "A tua chave da Anthropic parece inválida ou expirou. Verifica-a nas definições do Parceiro.";
+  }
+  if (status === 429 || type === "rate_limit_error") {
+    return "Muitos pedidos de seguida. Espera uns segundos e tenta de novo.";
+  }
+  if (status === 400 && message) {
+    return "Pedido inválido: " + message;
+  }
+  if (status >= 500) {
+    return "O serviço da Anthropic está com problemas neste momento. Tenta mais tarde.";
+  }
+  return "Algo correu mal ao falar com o Claude. Tenta novamente daqui a pouco.";
+}
+
+/** Erro especial: o servidor não tem chave. Sinaliza fallback ao browser. */
+class NoServerKeyError extends Error {
+  constructor() {
+    super("no_key");
+    this.name = "NoServerKeyError";
+  }
+}
+
 /**
- * Chama Claude em streaming. Invoca `onDelta` com cada pedaço de texto.
- * Devolve o texto completo. Lança Error com mensagem amigável em caso de falha.
+ * Ponto de entrada do Parceiro. Tenta PRIMEIRO a rota do servidor (`/api/coach`),
+ * que usa a chave `ANTHROPIC_API_KEY` do Vercel se estiver configurada, ou a chave
+ * colada (enviada no corpo). Se o servidor não tiver chave nenhuma ou falhar,
+ * faz fallback à chamada directa do browser com a chave local — desde que exista.
+ */
+export async function sendParceiro(
+  apiKey: string | null,
+  context: FinancialContext,
+  history: ChatMessage[],
+  onDelta: (text: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  try {
+    return await streamViaServer(apiKey, context, history, onDelta, signal);
+  } catch (e) {
+    // Aborto pela utilizadora — não tentar fallback.
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    // Sem chave no servidor E sem chave local → não há como continuar.
+    if (e instanceof NoServerKeyError) {
+      if (!apiKey) {
+        throw new Error(
+          "Ainda não há chave da Anthropic. Configura-a no servidor (Vercel) ou cola-a nas definições do Parceiro."
+        );
+      }
+      // Há chave local mas o servidor não a aceitou como env — usa via browser.
+      return streamParceiro(apiKey, context, history, onDelta, signal);
+    }
+    // Qualquer outro erro do servidor: se temos chave local, tenta via browser.
+    if (apiKey) {
+      return streamParceiro(apiKey, context, history, onDelta, signal);
+    }
+    throw e;
+  }
+}
+
+/** Chama a rota do servidor `/api/coach` e processa o stream SSE devolvido. */
+async function streamViaServer(
+  apiKey: string | null,
+  context: FinancialContext,
+  history: ChatMessage[],
+  onDelta: (text: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  const systemWithData = buildSystemWithData(context);
+
+  let res: Response;
+  try {
+    res = await fetch("/api/coach", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      signal,
+      body: JSON.stringify({
+        model: PARCEIRO_MODEL,
+        max_tokens: 1200,
+        system: systemWithData,
+        messages: history.map((m) => ({ role: m.role, content: m.content })),
+        // Só enviada quando existe; o servidor prefere a env var se estiver definida.
+        ...(apiKey ? { apiKey } : {}),
+      }),
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    throw new Error("server_unreachable");
+  }
+
+  if (!res.ok || !res.body) {
+    let errCode = "";
+    let status = res.status;
+    let type = "";
+    let message: string | undefined;
+    try {
+      const body = (await res.json()) as {
+        error?: string;
+        status?: number;
+        detail?: { error?: { type?: string; message?: string } };
+      };
+      errCode = body?.error ?? "";
+      if (typeof body?.status === "number") status = body.status;
+      type = body?.detail?.error?.type ?? "";
+      message = body?.detail?.error?.message;
+    } catch {
+      /* corpo não-JSON */
+    }
+    if (errCode === "no_key") throw new NoServerKeyError();
+    // Erro real da Anthropic reencaminhado — mostra mensagem amigável.
+    throw new Error(friendlyUpstreamError(status, type, message));
+  }
+
+  return parseSSE(res.body, onDelta);
+}
+
+/**
+ * Chama Claude em streaming DIRECTAMENTE do browser (fallback). Invoca `onDelta`
+ * com cada pedaço de texto. Devolve o texto completo.
  */
 export async function streamParceiro(
   apiKey: string,
@@ -331,10 +508,7 @@ export async function streamParceiro(
   onDelta: (text: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
-  const systemWithData = `${PARCEIRO_SYSTEM}
-
-DADOS FINANCEIROS REAIS DA VIVIANNE (JSON, valores em MZN):
-${JSON.stringify(context)}`;
+  const systemWithData = buildSystemWithData(context);
 
   let res: Response;
   try {
@@ -366,24 +540,22 @@ ${JSON.stringify(context)}`;
     let friendly = "Algo correu mal ao falar com o Claude. Tenta novamente daqui a pouco.";
     try {
       const err = (await res.json()) as { error?: { type?: string; message?: string } };
-      const type = err?.error?.type ?? "";
-      if (res.status === 401 || type === "authentication_error") {
-        friendly =
-          "A tua chave da Anthropic parece inválida ou expirou. Verifica-a nas definições do Parceiro.";
-      } else if (res.status === 429 || type === "rate_limit_error") {
-        friendly = "Muitos pedidos de seguida. Espera uns segundos e tenta de novo.";
-      } else if (res.status === 400 && err?.error?.message) {
-        friendly = "Pedido inválido: " + err.error.message;
-      } else if (res.status >= 500) {
-        friendly = "O serviço da Anthropic está com problemas neste momento. Tenta mais tarde.";
-      }
+      friendly = friendlyUpstreamError(res.status, err?.error?.type ?? "", err?.error?.message);
     } catch {
       /* corpo não-JSON — usa mensagem genérica */
     }
     throw new Error(friendly);
   }
 
-  const reader = res.body.getReader();
+  return parseSSE(res.body, onDelta);
+}
+
+/** Processa um stream SSE da Messages API, acumulando e emitindo deltas de texto. */
+async function parseSSE(
+  body: ReadableStream<Uint8Array>,
+  onDelta: (text: string) => void
+): Promise<string> {
+  const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let full = "";

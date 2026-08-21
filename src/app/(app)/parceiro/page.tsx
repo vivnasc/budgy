@@ -10,15 +10,21 @@ import {
   Pencil,
   Sparkles,
   AlertTriangle,
+  MessageSquarePlus,
+  Server,
+  ChevronDown,
 } from "lucide-react";
 import { useTransactions, useAccounts, useGoals, useLatestTransactionDate } from "@/hooks/use-supabase-data";
 import {
   buildFinancialContext,
-  streamParceiro,
+  sendParceiro,
   getAnthropicKey,
   setAnthropicKey,
   clearAnthropicKey,
   maskKey,
+  loadParceiroHistory,
+  saveParceiroHistory,
+  clearParceiroHistory,
   type ChatMessage,
 } from "@/lib/parceiro";
 import { currentCycleStart, shiftCycle, cycleRangeFor } from "@/lib/period";
@@ -156,6 +162,68 @@ function KeySettings({
   );
 }
 
+// ─── Nota: guardar a chave no servidor (uma vez, para todos os aparelhos) ─────
+
+function ServerKeyNote() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="card p-4">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 text-left"
+      >
+        <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center flex-shrink-0">
+          <Server className="w-4 h-4 text-emerald-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-gray-100">
+            Guardar no servidor (uma vez, para todos os aparelhos)
+          </p>
+          <p className="text-2xs text-gray-500">
+            Configura a chave no Vercel e nunca mais a colas.
+          </p>
+        </div>
+        <ChevronDown
+          className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+      {open && (
+        <div className="mt-3 space-y-2 text-xs text-gray-400 leading-relaxed">
+          <p>
+            Se preferires não colar a chave em cada telemóvel, guarda-a uma só vez no
+            servidor:
+          </p>
+          <ol className="list-decimal list-inside space-y-1 text-gray-300">
+            <li>
+              Vercel → o teu projecto → <span className="text-gray-100">Settings</span> →{" "}
+              <span className="text-gray-100">Environment Variables</span>.
+            </li>
+            <li>
+              Adiciona uma variável com o nome{" "}
+              <code className="rounded bg-white/10 px-1 py-0.5 font-mono text-emerald-300">
+                ANTHROPIC_API_KEY
+              </code>{" "}
+              e cola lá a tua chave.
+            </li>
+            <li>
+              Marca <span className="text-gray-100">Production</span> e{" "}
+              <span className="text-gray-100">Preview</span>, guarda e faz{" "}
+              <span className="text-gray-100">Redeploy</span>.
+            </li>
+          </ol>
+          <p>
+            A partir daí, a caixa da chave aqui em cima passa a ser opcional — funciona
+            em qualquer aparelho sem colares nada. Se ainda não configuraste, cola a chave
+            acima que também funciona.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Página ──────────────────────────────────────────────────────────────────
 
 export default function ParceiroPage() {
@@ -169,12 +237,18 @@ export default function ParceiroPage() {
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const hydratedRef = useRef(false);
 
-  // Carrega estado da chave só no cliente (evita mismatch de hidratação).
+  // Carrega estado da chave + histórico só no cliente (evita mismatch de hidratação).
   useEffect(() => {
     const k = getAnthropicKey();
     setHasKey(!!k);
     setMaskedKey(k ? maskKey(k) : "");
+    const stored = loadParceiroHistory();
+    if (stored.length > 0) {
+      setMessages(stored.map((m, i) => ({ id: `h-${i}-${m.role}`, ...m })));
+    }
+    hydratedRef.current = true;
   }, []);
 
   // ── Ciclo de salário (configurável) ──
@@ -220,6 +294,24 @@ export default function ParceiroPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, busy]);
 
+  // Persiste a conversa quando termina cada troca (sobrevive a reloads/navegação).
+  useEffect(() => {
+    if (!hydratedRef.current || busy) return;
+    saveParceiroHistory(
+      messages
+        .filter((m) => m.content.trim().length > 0)
+        .map((m) => ({ role: m.role, content: m.content }))
+    );
+  }, [messages, busy]);
+
+  const handleNewConversation = useCallback(() => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setError(null);
+    setInput("");
+    clearParceiroHistory();
+  }, []);
+
   const handleSaveKey = useCallback((key: string) => {
     setAnthropicKey(key);
     setHasKey(true);
@@ -237,11 +329,8 @@ export default function ParceiroPage() {
     async (text: string) => {
       const clean = text.trim();
       if (!clean || busy) return;
+      // Chave local é opcional: se o servidor tiver ANTHROPIC_API_KEY, funciona sem ela.
       const key = getAnthropicKey();
-      if (!key) {
-        setShowSettings(true);
-        return;
-      }
 
       setError(null);
       setInput("");
@@ -263,7 +352,7 @@ export default function ParceiroPage() {
       abortRef.current = controller;
 
       try {
-        await streamParceiro(
+        await sendParceiro(
           key,
           context,
           history,
@@ -277,12 +366,20 @@ export default function ParceiroPage() {
           controller.signal
         );
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Algo correu mal. Tenta de novo.";
-        setError(msg);
-        // Remove a bolha vazia do assistente se não veio nada.
-        setMessages((prev) =>
-          prev.filter((m) => !(m.id === assistantId && m.content === ""))
-        );
+        if (e instanceof DOMException && e.name === "AbortError") {
+          setMessages((prev) =>
+            prev.filter((m) => !(m.id === assistantId && m.content === ""))
+          );
+        } else {
+          const msg = e instanceof Error ? e.message : "Algo correu mal. Tenta de novo.";
+          setError(msg);
+          // Sem chave em lado nenhum → abre as definições para colar a chave.
+          if (/chave/i.test(msg)) setShowSettings(true);
+          // Remove a bolha vazia do assistente se não veio nada.
+          setMessages((prev) =>
+            prev.filter((m) => !(m.id === assistantId && m.content === ""))
+          );
+        }
       } finally {
         setBusy(false);
         abortRef.current = null;
@@ -307,14 +404,22 @@ export default function ParceiroPage() {
               <p className="text-2xs text-emerald-100/90">O teu parceiro de dinheiro</p>
             </div>
           </div>
-          {hasKey && (
+          <div className="flex items-center gap-2">
+            {messages.length > 0 && (
+              <button
+                onClick={handleNewConversation}
+                className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-2xs font-medium text-emerald-50 hover:bg-white/20"
+              >
+                <MessageSquarePlus className="w-3.5 h-3.5" /> Nova conversa
+              </button>
+            )}
             <button
               onClick={() => setShowSettings((s) => !s)}
               className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2.5 py-1.5 text-2xs font-medium text-emerald-50 hover:bg-white/20"
             >
               <KeyRound className="w-3.5 h-3.5" /> Chave
             </button>
-          )}
+          </div>
         </div>
       </header>
 
@@ -328,11 +433,12 @@ export default function ParceiroPage() {
               onSave={handleSaveKey}
               onRemove={handleRemoveKey}
             />
+            <ServerKeyNote />
             <CicloSettings startDay={startDay} onChange={setStartDay} />
           </>
         )}
 
-        {hasKey && (
+        {
           <>
             {/* Conversa */}
             <div
@@ -432,7 +538,7 @@ export default function ParceiroPage() {
               </button>
             </form>
           </>
-        )}
+        }
       </div>
     </div>
   );

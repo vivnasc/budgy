@@ -116,7 +116,13 @@ export default function ContasPage() {
             <div className="card p-8 text-center">
               <Wallet className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-sm text-gray-500 mb-1">Sem contas ainda</p>
-              <p className="text-xs text-gray-400">Adiciona M-Pesa, Banco ou Dinheiro para começar</p>
+              <p className="text-xs text-gray-400 mb-4">Adiciona M-Pesa, Banco ou Dinheiro para começar</p>
+              <button
+                onClick={() => setCreating(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 active:scale-95 transition-all"
+              >
+                <Plus className="w-4 h-4" /> Adicionar conta
+              </button>
             </div>
           ) : (
             <div className="space-y-3">
