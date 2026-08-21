@@ -20,6 +20,7 @@ import {
   Download,
   ShieldCheck,
   RotateCcw,
+  ClipboardPaste,
 } from "lucide-react";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/auth/client";
@@ -47,10 +48,11 @@ import {
   CREATE_NEW,
 } from "@/lib/mobills-safe";
 import { useAccounts, useTransactions } from "@/hooks/use-supabase-data";
+import { parsePastedTransactions } from "@/lib/paste-parser";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Tab = "sms" | "import";
+type Tab = "sms" | "import" | "paste";
 type ImportStep = "upload" | "mobills" | "preview" | "mapping" | "confirm";
 
 /** Resumo do corte Mobills mostrado no topo da revisão. */
@@ -216,32 +218,43 @@ export default function ImportarPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab("sms")}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-semibold transition-all ${
               activeTab === "sms"
                 ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
                 : "bg-gray-100 text-gray-600"
             }`}
           >
-            <MessageSquareText className="w-4 h-4" />
-            SMS Bancário
+            <MessageSquareText className="w-4 h-4 flex-shrink-0" />
+            SMS
           </button>
           <button
             onClick={() => setActiveTab("import")}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-semibold transition-all ${
               activeTab === "import"
                 ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
                 : "bg-gray-100 text-gray-600"
             }`}
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            Importar Ficheiro
+            <FileSpreadsheet className="w-4 h-4 flex-shrink-0" />
+            Ficheiro
+          </button>
+          <button
+            onClick={() => setActiveTab("paste")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === "paste"
+                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
+                : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            <ClipboardPaste className="w-4 h-4 flex-shrink-0" />
+            Colar
           </button>
         </div>
       </header>
 
       {/* Content */}
       <div className="px-4 py-6">
-        {activeTab === "sms" ? <SMSTab /> : <ImportTab />}
+        {activeTab === "sms" ? <SMSTab /> : activeTab === "paste" ? <PasteTab /> : <ImportTab />}
         <BackupRestoreSection />
         <ResetDataSection />
       </div>
@@ -602,6 +615,260 @@ function ResetDataSection() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Colar Transacções Tab ───────────────────────────────────────────────────
+
+function PasteTab() {
+  const { data: accounts, loading: accountsLoading } = useAccounts();
+  const realAccounts = accounts ?? [];
+
+  const [pasteText, setPasteText] = useState("");
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Reconhece contrapartidas de transferências já guardadas do outro lado.
+  useCounterpartMatching(pendingTransactions, setPendingTransactions);
+
+  // Selecciona por defeito a primeira conta real assim que carregarem.
+  useEffect(() => {
+    if (!selectedAccount && realAccounts.length > 0) {
+      setSelectedAccount(realAccounts[0]!.name);
+    }
+  }, [realAccounts, selectedAccount]);
+
+  const handleParse = useCallback(() => {
+    setError(null);
+    const parsed = parsePastedTransactions(pasteText);
+    if (parsed.length === 0) {
+      setError(
+        "Não consegui ler transações. Confirma que colaste o texto do banco com data, descrição e valor (ex: 21 AUG 2026 ... -3,220.38 MZN)."
+      );
+      return;
+    }
+    const built: PendingTransaction[] = parsed.map((tx, i) => ({
+      id: `paste-${Date.now()}-${i}`,
+      source: "Colado",
+      type: tx.type,
+      amount: tx.amount,
+      currency: "MZN",
+      date: tx.date,
+      description: tx.description,
+      category: tx.category || "Outros",
+      suggestedCategory: tx.category,
+      ...(selectedAccount ? { accountHint: selectedAccount } : {}),
+      confidence: 0.7,
+      status: "pending" as const,
+    }));
+    // Aplica decisões aprendidas antes de mostrar (a app lembra-se).
+    const learned = applyLearnedRules(built);
+    setPendingTransactions((prev) => [...learned, ...prev]);
+    setPasteText("");
+  }, [pasteText, selectedAccount]);
+
+  const handleApprove = (id: string) => {
+    setPendingTransactions((prev) =>
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category: tx.category });
+        return { ...tx, status: "approved" as const };
+      })
+    );
+  };
+
+  const handleReject = (id: string) => {
+    setPendingTransactions((prev) =>
+      prev.map((tx) => (tx.id === id ? { ...tx, status: "rejected" as const } : tx))
+    );
+  };
+
+  const handleCategoryChange = (id: string, category: string) => {
+    setPendingTransactions((prev) =>
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category });
+        return { ...tx, category, status: "pending" as const };
+      })
+    );
+  };
+
+  const handleTypeChange = (id: string, type: PendingTransaction["type"]) => {
+    setPendingTransactions((prev) =>
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        const category = defaultCategoryForType(type, tx.category);
+        rememberDecision(tx.description, tx.amount, { type, category });
+        return { ...tx, type, category, status: "pending" as const };
+      })
+    );
+  };
+
+  const approvedCount = pendingTransactions.filter((tx) => tx.status === "approved").length;
+  const pendingCount = pendingTransactions.filter((tx) => tx.status === "pending").length;
+
+  const handleSaveApproved = async () => {
+    const approved = pendingTransactions.filter((tx) => tx.status === "approved");
+    if (approved.length === 0) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      const transactions = approved.map((tx) => ({
+        type: tx.type,
+        amount: tx.amount,
+        currency: tx.currency,
+        date: tx.date,
+        description: tx.description,
+        category_name: tx.category,
+        ...(tx.accountHint ? { account: tx.accountHint } : {}),
+        status: "completed",
+      }));
+
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactions }),
+      });
+
+      if (response.ok) {
+        setPendingTransactions((prev) => prev.filter((tx) => tx.status !== "approved"));
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || "Erro ao guardar transações");
+      }
+    } catch {
+      setError("Erro ao guardar transações");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Como funciona */}
+      <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
+        <div className="flex items-start gap-3">
+          <Sparkles className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="text-sm font-bold text-emerald-900">Colar transacções</h3>
+            <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+              Quando não consegues exportar CSV, copia o bloco de movimentos do teu
+              internet-banking e cola aqui. O BUDGY lê datas, descrições e valores. Escolhe a
+              conta, carrega em <strong>Ler</strong> e valida.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Escolha da conta */}
+      <div>
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+          A que conta pertence
+        </h3>
+        {accountsLoading ? (
+          <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            A carregar as tuas contas...
+          </div>
+        ) : realAccounts.length === 0 ? (
+          <Link
+            href="/contas"
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200"
+          >
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            Ainda não tens contas — cria uma primeiro
+          </Link>
+        ) : (
+          <div className="flex gap-2 flex-wrap">
+            {realAccounts.map((account) => (
+              <button
+                key={account.id}
+                onClick={() => setSelectedAccount(account.name)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                  selectedAccount === account.name
+                    ? "bg-emerald-500 text-white"
+                    : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {account.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Área de texto */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-50 flex items-center gap-2">
+          <ClipboardPaste className="w-4 h-4 text-gray-400" />
+          <span className="text-sm font-semibold text-gray-700">Colar texto do banco</span>
+        </div>
+        <textarea
+          value={pasteText}
+          onChange={(e) => setPasteText(e.target.value)}
+          placeholder={`Cola aqui os movimentos copiados do internet-banking...\n\nExemplo:\n21 AUG 2026   FT2623333454   Pagamento no PV (VISA)\nPAYPAL *PADDLE.NET   -3,220.38   MZN`}
+          className="w-full px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 resize-none focus:outline-none"
+          rows={8}
+        />
+        <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between">
+          <span className="text-xs text-gray-400">
+            {pasteText.length > 0 ? `${pasteText.length} caracteres` : "Uma transação por bloco"}
+          </span>
+          <button
+            onClick={handleParse}
+            disabled={!pasteText.trim()}
+            className="flex items-center gap-2 bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-emerald-600"
+          >
+            <Sparkles className="w-4 h-4" />
+            Ler
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-3 bg-red-50 rounded-2xl p-4 border border-red-100">
+          <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* Transações para validar */}
+      {pendingTransactions.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-gray-900">
+              Transações para validar
+              {pendingCount > 0 && (
+                <span className="ml-2 text-xs font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                  {pendingCount} pendente{pendingCount !== 1 ? "s" : ""}
+                </span>
+              )}
+            </h3>
+            {approvedCount > 0 && (
+              <button
+                onClick={handleSaveApproved}
+                disabled={saving}
+                className="flex items-center gap-1.5 bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Guardar {approvedCount}
+              </button>
+            )}
+          </div>
+
+          <PendingReviewList
+            transactions={pendingTransactions}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onCategoryChange={handleCategoryChange}
+            onTypeChange={handleTypeChange}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -160,6 +160,70 @@ function extractCPCDescription(raw: string): { description: string; merchant: st
   return { description: raw.trim(), merchant: raw.trim() };
 }
 
+export interface CpcClassification {
+  /** Descrição pronta a mostrar (comerciante quando existe, senão a descrição). */
+  displayDescription: string;
+  type: "income" | "expense" | "transfer";
+  category: string;
+  /** Categorização com baixa confiança — vale a pena a utilizadora rever. */
+  needsReview: boolean;
+}
+
+/**
+ * Classifica um movimento CPC a partir da descrição bruta, do valor (magnitude
+ * positiva) e da direção (crédito = entrada / débito = saída).
+ *
+ * Fonte única de verdade partilhada pelo leitor de CSV do CPC (`parseCPCStatement`)
+ * e pela funcionalidade "Colar transacções" (`paste-parser.ts`) — assim as regras
+ * de tipo/categoria não são duplicadas.
+ */
+export function classifyCpcRecord(
+  descriptionRaw: string,
+  amount: number,
+  isCredit: boolean
+): CpcClassification {
+  const { description, merchant } = extractCPCDescription(descriptionRaw);
+
+  let type: "income" | "expense" | "transfer" = isCredit ? "income" : "expense";
+
+  // Detect transfers between the user's OWN accounts (CPC → Moza/Standard).
+  const metixBeneficiary = /Transf\.?\s+METIX\s+via\s+NIB\s+Enviada\s*(\S.*)?$/i.exec(descriptionRaw);
+  if (
+    /Transf(?:erencia)?\s+Interb/i.test(descriptionRaw) ||
+    /Transferencia\s+Intrab/i.test(descriptionRaw) ||
+    (metixBeneficiary !== null && !metixBeneficiary[1])
+  ) {
+    type = "transfer";
+  }
+
+  // Commissions are always an expense
+  if (/^Comissao/i.test(descriptionRaw)) {
+    type = "expense";
+  }
+
+  const searchText = `${merchant} ${description}`;
+  const categoryResult = autoCategorize(searchText, type, amount);
+
+  let mappedCategory = categoryResult.category;
+  if (/PAGAMENTO SALARIO/i.test(descriptionRaw)) mappedCategory = "Salário";
+  else if (/Prestacao Mensal Emprestimo/i.test(descriptionRaw)) mappedCategory = "Dívidas";
+  else if (/Comissao Trf/i.test(descriptionRaw)) mappedCategory = "Taxas Bancárias";
+  else if (/DIVIDENDOS/i.test(descriptionRaw)) mappedCategory = "Rendimento Passivo";
+  else if (/Regularizacao ATM/i.test(descriptionRaw)) mappedCategory = "Reembolso";
+  else if (/MINHA CONTA/i.test(descriptionRaw) || (type === "transfer" && /METIX|Conta a Conta/i.test(descriptionRaw))) mappedCategory = "Transferência";
+  else if (/Creche|CENTR\w*\s*INFANTIL|PIKINICO|Col[eé]gio|Escola/i.test(descriptionRaw)) mappedCategory = "Educação";
+  else if (/Adao\s+Baptista/i.test(descriptionRaw)) mappedCategory = "Compras";
+  else if (/Transf.+Breno|Transf.+Nazira/i.test(descriptionRaw)) mappedCategory = "Família";
+  else if (/Anuidade.*cart[aã]o|Imposto de selo/i.test(descriptionRaw)) mappedCategory = "Taxas Bancárias";
+
+  return {
+    displayDescription: merchant || description,
+    type,
+    category: mappedCategory,
+    needsReview: categoryResult.confidence < 0.5,
+  };
+}
+
 export function parseCPCStatement(csvContent: string): ImportResult {
   const errors: string[] = [];
   const imported: ImportedTransaction[] = [];
@@ -247,56 +311,10 @@ export function parseCPCStatement(csvContent: string): ImportResult {
       continue;
     }
 
-    // Determine type
-    let type: "income" | "expense" | "transfer" = "expense";
-    const { description, merchant } = extractCPCDescription(descriptionRaw);
-
-    if (credit > 0) {
-      type = "income";
-    }
-
-    // Detect transfers between the user's OWN accounts (CPC → Moza/Standard).
-    // These move money between her own pockets — not income, not spending.
-    //  - "Transf ... Interb/Intrab"      → interbank between own accounts
-    //  - "Transf. METIX via NIB Enviada"  → own-account move ONLY when nothing
-    //                                       follows "Enviada". When a beneficiary
-    //                                       name follows (IB-...-Creche/Adao/...)
-    //                                       it is a real payment → stays expense.
-    //
-    // NOTE: "Transf. Conta a Conta - BALCAO" is intentionally NOT auto-tagged as
-    // a transfer. It's a generic counter transfer that can just as easily be a
-    // real payment to a third party (e.g. paying a builder for house works), so
-    // we leave it as an expense by default and let the user confirm/relabel it.
-    const metixBeneficiary = /Transf\.?\s+METIX\s+via\s+NIB\s+Enviada\s*(\S.*)?$/i.exec(descriptionRaw);
-    if (
-      /Transf(?:erencia)?\s+Interb/i.test(descriptionRaw) ||
-      /Transferencia\s+Intrab/i.test(descriptionRaw) ||
-      (metixBeneficiary !== null && !metixBeneficiary[1])
-    ) {
-      type = "transfer";
-    }
-
-    // Detect commissions as expense
-    if (/^Comissao/i.test(descriptionRaw)) {
-      type = "expense";
-    }
-
-    // Auto-categorize based on merchant/description
-    const searchText = `${merchant} ${description}`;
-    const categoryResult = autoCategorize(searchText, type, amount);
-
-    // Special CPC-specific categorization
-    let mappedCategory = categoryResult.category;
-    if (/PAGAMENTO SALARIO/i.test(descriptionRaw)) mappedCategory = "Salário";
-    else if (/Prestacao Mensal Emprestimo/i.test(descriptionRaw)) mappedCategory = "Dívidas";
-    else if (/Comissao Trf/i.test(descriptionRaw)) mappedCategory = "Taxas Bancárias";
-    else if (/DIVIDENDOS/i.test(descriptionRaw)) mappedCategory = "Rendimento Passivo";
-    else if (/Regularizacao ATM/i.test(descriptionRaw)) mappedCategory = "Reembolso";
-    else if (/MINHA CONTA/i.test(descriptionRaw) || (type === "transfer" && /METIX|Conta a Conta/i.test(descriptionRaw))) mappedCategory = "Transferência";
-    else if (/Creche|CENTR\w*\s*INFANTIL|PIKINICO|Col[eé]gio|Escola/i.test(descriptionRaw)) mappedCategory = "Educação";
-    else if (/Adao\s+Baptista/i.test(descriptionRaw)) mappedCategory = "Compras";
-    else if (/Transf.+Breno|Transf.+Nazira/i.test(descriptionRaw)) mappedCategory = "Família";
-    else if (/Anuidade.*cart[aã]o|Imposto de selo/i.test(descriptionRaw)) mappedCategory = "Taxas Bancárias";
+    // Classify (type + category + clean description) — shared with the paste flow.
+    const { displayDescription, type, category: mappedCategory, needsReview } =
+      classifyCpcRecord(descriptionRaw, amount, credit > 0);
+    const { description } = extractCPCDescription(descriptionRaw);
 
     // Track stats
     if (!minDate || date < minDate) minDate = date;
@@ -306,12 +324,9 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     else totalTransfers += amount;
     categoryCounts[mappedCategory] = (categoryCounts[mappedCategory] || 0) + 1;
 
-    // Build display description
-    const displayDesc = merchant || description;
-
     imported.push({
       date,
-      description: displayDesc,
+      description: displayDescription,
       originalCategory: description,
       mappedCategory,
       account: "CPC",
@@ -320,7 +335,7 @@ export function parseCPCStatement(csvContent: string): ImportResult {
       status: "completed",
       tags: txRef ? [txRef] : [],
       notes: descriptionRaw,
-      needsReview: categoryResult.confidence < 0.5,
+      needsReview,
     });
   }
 
