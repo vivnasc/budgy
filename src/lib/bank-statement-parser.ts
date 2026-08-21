@@ -316,7 +316,12 @@ export function parseCPCStatement(csvContent: string): ImportResult {
       classifyCpcRecord(descriptionRaw, amount, credit > 0);
     const { description } = extractCPCDescription(descriptionRaw);
 
-    // Track stats
+    // Transferências guardam um valor COM SINAL: entrada (crédito) = positivo,
+    // saída (débito) = negativo — assim uma transferência recebida SOMA ao saldo
+    // da conta. Receitas/despesas mantêm a magnitude positiva (direcção no tipo).
+    const signedAmount = type === "transfer" ? (credit > 0 ? amount : -amount) : amount;
+
+    // Track stats — os totais do resumo somam sempre a magnitude (para o ecrã).
     if (!minDate || date < minDate) minDate = date;
     if (!maxDate || date > maxDate) maxDate = date;
     if (type === "income") totalIncome += amount;
@@ -330,7 +335,7 @@ export function parseCPCStatement(csvContent: string): ImportResult {
       originalCategory: description,
       mappedCategory,
       account: "CPC",
-      amount,
+      amount: signedAmount,
       type,
       status: "completed",
       tags: txRef ? [txRef] : [],
@@ -577,6 +582,21 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
       type = "transfer";
     }
 
+    // Transferências interbancárias RECEBIDAS chegam como crédito mas NÃO são
+    // rendimento — são movimentos entre contas. O salário genuíno mantém-se
+    // como rendimento (TEI RCB ... Sal / MTR BIM ORD).
+    const isMozaSalary = /TEI RCB.*Sal\b|MTR BIM ORD/i.test(descriptionRaw);
+    if (
+      credit > 0 &&
+      !isMozaSalary &&
+      (/^\s*Transfer[eê]ncia\s+de\b/i.test(descriptionRaw) ||
+        /Transfer[eê]ncia\s+recebida/i.test(descriptionRaw) ||
+        /TEI RCB.*Transfer/i.test(descriptionRaw) ||
+        /via WEB by .*BANCO/i.test(descriptionRaw))
+    ) {
+      type = "transfer";
+    }
+
     // Commissions and taxes are expenses
     if (/^Comissão|^Imposto de Selo/i.test(descriptionRaw)) {
       type = "expense";
@@ -604,6 +624,10 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
     else if (/TRF-Breno/i.test(descriptionRaw)) mappedCategory = "Família";
     else if (/Levantamento/i.test(descriptionRaw)) mappedCategory = "Levantamento";
 
+    // Transferências guardam valor COM SINAL (entrada +, saída −); o resumo
+    // continua a somar a magnitude para o ecrã.
+    const signedAmount = type === "transfer" ? (credit > 0 ? amount : -amount) : amount;
+
     // Track stats
     if (!minDate || date < minDate) minDate = date;
     if (!maxDate || date > maxDate) maxDate = date;
@@ -618,7 +642,7 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
       originalCategory: descriptionRaw.replace(/^"|"$/g, ""),
       mappedCategory,
       account: "Moza Banco",
-      amount,
+      amount: signedAmount,
       type,
       status: "completed",
       tags: refNumber ? [refNumber] : [],
@@ -880,6 +904,11 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
   let totalIncome = 0;
   let totalExpenses = 0;
   let totalTransfers = 0;
+  // Soma COM SINAL das transferências (entrada +, saída −). Serve para
+  // recalcular o saldo de abertura sem assumir que todas as transferências são
+  // saídas (assumção antiga que passou a estar errada com transferências
+  // recebidas). O `totalTransfers` acima fica com a magnitude, para o ecrã.
+  let transferNetSigned = 0;
   let minDate = "";
   let maxDate = "";
   // Standard Bank carries no explicit "opening balance" header, but it does
@@ -949,7 +978,9 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
       type = "transfer";
       description = "Levantamento ATM";
     } else if (/^Transferencia\b/i.test(description)) {
-      type = "income";
+      // Transferências (recebidas ou enviadas) são movimentos entre contas, não
+      // rendimento/despesa. O sinal vem da direcção (crédito = entrada).
+      type = "transfer";
       description = description.replace(/\s+\d{6,}.*$/i, "").replace(/\s+ENET.*$/i, "").trim();
     } else if (/^Refund\b/i.test(description)) {
       type = "income";
@@ -963,11 +994,18 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
 
     const categoryResult = autoCategorize(description, type, amount);
 
+    // Transferências guardam valor COM SINAL (entrada +, saída −).
+    const isIncoming = credit > 0 || singleAmount > 0;
+    const signedAmount = type === "transfer" ? (isIncoming ? amount : -amount) : amount;
+
     if (!minDate || date < minDate) minDate = date;
     if (!maxDate || date > maxDate) maxDate = date;
     if (type === "income") totalIncome += amount;
     else if (type === "expense") totalExpenses += amount;
-    else totalTransfers += amount;
+    else {
+      totalTransfers += amount;
+      transferNetSigned += signedAmount;
+    }
     categoryCounts[categoryResult.category] = (categoryCounts[categoryResult.category] || 0) + 1;
 
     imported.push({
@@ -976,7 +1014,7 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
       originalCategory: description,
       mappedCategory: categoryResult.category,
       account: "Standard Bank",
-      amount,
+      amount: signedAmount,
       type,
       status: "completed",
       tags: [],
@@ -998,7 +1036,7 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
   // calibrates the account to the real closing balance.
   let openingBalances: Array<{ accountName: string; amount: number; date: string }> = [];
   if (closingBalance !== null && minDate) {
-    const netSigned = totalIncome - totalExpenses - totalTransfers;
+    const netSigned = totalIncome - totalExpenses + transferNetSigned;
     const openingAmount = closingBalance - netSigned;
     openingBalances = [{ accountName: "Standard Bank", amount: openingAmount, date: minDate }];
   }

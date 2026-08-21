@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   RotateCcw,
   ClipboardPaste,
+  ArrowLeftRight,
 } from "lucide-react";
 import Link from "next/link";
 import { createBrowserClient } from "@/lib/auth/client";
@@ -455,6 +456,8 @@ function ResetDataSection() {
 
   const [recat, setRecat] = useState<{ running: boolean; updated?: number; total?: number; err?: string }>({ running: false });
   const [statusFix, setStatusFix] = useState<{ running: boolean; pending?: number; completed?: number; err?: string }>({ running: false });
+  const [transferFix, setTransferFix] = useState<{ running: boolean; done?: boolean; reclassified?: number; resigned?: number; message?: string; err?: string }>({ running: false });
+  const [confirmTransfer, setConfirmTransfer] = useState(false);
 
   const handleReset = async () => {
     setResetting(true);
@@ -489,6 +492,30 @@ function ResetDataSection() {
       }
     } catch {
       setRecat({ running: false, err: "Erro de rede" });
+    }
+  };
+
+  const handleFixTransfers = async () => {
+    setTransferFix({ running: true });
+    setConfirmTransfer(false);
+    try {
+      const res = await fetch("/api/transactions/fix-transfers", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setTransferFix({
+          running: false,
+          done: true,
+          reclassified: data.reclassified,
+          resigned: data.resigned,
+          message: data.message,
+        });
+        // Recarrega para os saldos corrigidos aparecerem no painel/contas
+        setTimeout(() => window.location.reload(), 2200);
+      } else {
+        setTransferFix({ running: false, err: data.error || "Erro ao corrigir transferências" });
+      }
+    } catch {
+      setTransferFix({ running: false, err: "Erro de rede" });
     }
   };
 
@@ -565,6 +592,51 @@ function ResetDataSection() {
               </button>
             )}
             {statusFix.err && <p className="text-xs text-red-700 mt-2">{statusFix.err}</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Corrigir transferências (não destrutivo) */}
+      <div className="bg-indigo-50 rounded-2xl border border-indigo-100 p-4">
+        <div className="flex items-start gap-3">
+          <ArrowLeftRight className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-indigo-900">Corrigir transferências</h3>
+            <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
+              Corrige as transferências que já lá estão: as <strong>recebidas</strong> deixam de contar como receita e passam a <strong>somar</strong> ao saldo da conta que as recebeu; as <strong>enviadas</strong> passam a subtrair. Não apaga nada — só ajusta tipo e sinal. Tens sempre o backup acima.
+            </p>
+            {transferFix.done ? (
+              <p className="text-xs text-emerald-700 font-semibold mt-3 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" /> {transferFix.message}
+              </p>
+            ) : confirmTransfer ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={handleFixTransfers}
+                  disabled={transferFix.running}
+                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                >
+                  {transferFix.running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  {transferFix.running ? "A corrigir..." : "Sim, corrigir agora"}
+                </button>
+                <button
+                  onClick={() => setConfirmTransfer(false)}
+                  disabled={transferFix.running}
+                  className="inline-flex items-center gap-2 bg-white border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmTransfer(true)}
+                className="mt-3 inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold"
+              >
+                <ArrowLeftRight className="w-3.5 h-3.5" />
+                Corrigir transferências
+              </button>
+            )}
+            {transferFix.err && <p className="text-xs text-red-700 mt-2">{transferFix.err}</p>}
           </div>
         </div>
       </div>
@@ -1278,7 +1350,7 @@ function PendingTransactionCard({
         <div className="text-right">
           <p className={`text-lg font-bold ${tx.type === "income" ? "text-emerald-600" : tx.type === "expense" ? "text-gray-900" : "text-blue-600"}`}>
             {tx.type === "income" ? "+" : tx.type === "expense" ? "-" : ""}
-            {tx.amount.toLocaleString("pt-MZ")} {tx.currency}
+            {Math.abs(tx.amount).toLocaleString("pt-MZ")} {tx.currency}
           </p>
         </div>
       </div>

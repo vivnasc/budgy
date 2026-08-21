@@ -135,10 +135,16 @@ function parseRecord(record: string): ParsedPastedTransaction | null {
     finalCategory = "Transferência";
   }
 
+  // Transferências guardam valor COM SINAL: entrada (crédito, valor original
+  // positivo) = positivo; saída (débito) = negativo. Receitas/despesas mantêm a
+  // magnitude positiva (a direcção vem do tipo).
+  const finalAmount =
+    finalType === "transfer" ? (signed > 0 ? magnitude : -magnitude) : magnitude;
+
   return {
     date: iso,
     description: displayDescription || desc,
-    amount: magnitude,
+    amount: finalAmount,
     type: finalType,
     category: finalCategory,
   };

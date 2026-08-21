@@ -105,7 +105,10 @@ CREATE TABLE money_schema.transactions (
   account_id              UUID NOT NULL REFERENCES money_schema.accounts(id) ON DELETE CASCADE,
   category_id             UUID REFERENCES money_schema.categories(id) ON DELETE SET NULL,
   type                    money_schema.transaction_type NOT NULL,
-  amount                  DECIMAL(15, 2) NOT NULL CHECK (amount > 0),
+  -- Valor NUNCA é zero, mas PODE ser negativo: as transferências guardam o
+  -- valor COM SINAL (entrada +, saída −) para que uma transferência recebida
+  -- SOME ao saldo da conta. Receitas/despesas guardam magnitude positiva.
+  amount                  DECIMAL(15, 2) NOT NULL CHECK (amount <> 0),
   currency                TEXT NOT NULL DEFAULT 'MZN',
   description             TEXT,
   date                    DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -115,12 +118,9 @@ CREATE TABLE money_schema.transactions (
   attachments             TEXT[],
   transfer_to_account_id  UUID REFERENCES money_schema.accounts(id) ON DELETE SET NULL,
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-  -- Transfer must have a target account
-  CONSTRAINT chk_transfer_target CHECK (
-    (type != 'transfer') OR (transfer_to_account_id IS NOT NULL)
-  )
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+  -- NOTA: as transferências importadas de extratos bancários afectam UMA só
+  -- conta (não têm conta de destino), por isso NÃO se exige transfer_to_account_id.
 );
 
 COMMENT ON TABLE money_schema.transactions IS 'Financial transactions (income, expense, transfer)';

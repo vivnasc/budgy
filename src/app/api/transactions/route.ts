@@ -501,10 +501,15 @@ async function applyOpeningBalance(
     const amt = Number(tx.amount) || 0;
     if (tx.account_id === accountId) {
       if (tx.type === "income") budgySum += amt;
-      else if (tx.type === "expense" || tx.type === "transfer") budgySum -= amt;
+      else if (tx.type === "expense") budgySum -= amt;
+      else if (tx.type === "transfer") {
+        // Single-account transfer: signed amount (in +, out −). Two-account
+        // transfer (transfer_to set): positive magnitude leaving this account.
+        budgySum += tx.transfer_to_account_id ? -Math.abs(amt) : amt;
+      }
     }
     if (tx.transfer_to_account_id === accountId && tx.type === "transfer") {
-      budgySum += amt;
+      budgySum += Math.abs(amt);
     }
   }
 

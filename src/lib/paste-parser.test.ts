@@ -28,9 +28,17 @@ test("lê exactamente 3 transações", () => {
   assert.equal(result.length, 3);
 });
 
-test("valores: 3220.38, 100000, 100000", () => {
+test("valores COM SINAL: despesa +3220.38, transferências ENVIADAS -100000", () => {
+  // Despesa mantém magnitude positiva; transferências guardam sinal (saída = −).
   assert.deepEqual(
     result.map((r) => r.amount),
+    [3220.38, -100000, -100000]
+  );
+});
+
+test("magnitudes: 3220.38, 100000, 100000", () => {
+  assert.deepEqual(
+    result.map((r) => Math.abs(r.amount)),
     [3220.38, 100000, 100000]
   );
 });
@@ -39,8 +47,15 @@ test("todas as datas são 2026-08-21", () => {
   assert.ok(result.every((r) => r.date === "2026-08-21"));
 });
 
-test("valores são sempre positivos (constraint amount > 0)", () => {
-  assert.ok(result.every((r) => r.amount > 0));
+test("nenhum valor é zero (constraint amount <> 0)", () => {
+  assert.ok(result.every((r) => r.amount !== 0));
+});
+
+test("transferências enviadas são negativas; despesas/receitas positivas", () => {
+  for (const r of result) {
+    if (r.type === "transfer") assert.ok(r.amount < 0, "transferência enviada < 0");
+    else assert.ok(r.amount > 0, "receita/despesa > 0");
+  }
 });
 
 test("o primeiro (PayPal) é uma despesa", () => {

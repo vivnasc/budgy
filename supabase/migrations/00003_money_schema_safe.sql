@@ -76,7 +76,9 @@ CREATE TABLE IF NOT EXISTS money_schema.transactions (
   account_id              UUID REFERENCES money_schema.accounts(id) ON DELETE SET NULL,
   category_id             UUID REFERENCES money_schema.categories(id) ON DELETE SET NULL,
   type                    money_schema.transaction_type NOT NULL,
-  amount                  DECIMAL(15, 2) NOT NULL CHECK (amount > 0),
+  -- Valor nunca zero, mas pode ser NEGATIVO: transferências guardam o valor com
+  -- sinal (entrada +, saída −) para que uma transferência recebida some ao saldo.
+  amount                  DECIMAL(15, 2) NOT NULL CHECK (amount <> 0),
   currency                TEXT NOT NULL DEFAULT 'MZN',
   description             TEXT,
   date                    DATE NOT NULL DEFAULT CURRENT_DATE,

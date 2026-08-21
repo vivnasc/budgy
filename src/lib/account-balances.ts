@@ -81,15 +81,34 @@ export async function computeAccountBalances(
 
     if (tx.account_id) {
       const acc = ensure(tx.account_id);
+      // income keeps positive magnitude (+), expense subtracts (−).
+      //
+      // Transfers come in two shapes:
+      //  - Single-account (imported bank rows, no transfer_to_account_id): the
+      //    `amount` is SIGNED — money in = +amt, money out = −amt — so an
+      //    incoming transfer ADDS to the receiving account. We add it as-is.
+      //  - Two-account (manual entry / Mobills Transfers sheet, with a
+      //    transfer_to_account_id): the row's `amount` is a positive magnitude
+      //    that LEAVES this origin account and is CREDITED to the destination by
+      //    the secondary branch below. So the origin leg is always a debit.
       const delta =
-        tx.type === "income" ? amt : tx.type === "expense" || tx.type === "transfer" ? -amt : 0;
+        tx.type === "income"
+          ? amt
+          : tx.type === "expense"
+            ? -amt
+            : tx.type === "transfer"
+              ? tx.transfer_to_account_id
+                ? -Math.abs(amt)
+                : amt
+              : 0;
       if (counts_for_predicted) acc.balance_predicted += delta;
       if (isCompleted) acc.balance += delta;
     }
     if (tx.transfer_to_account_id && tx.type === "transfer") {
       const acc = ensure(tx.transfer_to_account_id);
-      if (counts_for_predicted) acc.balance_predicted += amt;
-      if (isCompleted) acc.balance += amt;
+      const credit = Math.abs(amt);
+      if (counts_for_predicted) acc.balance_predicted += credit;
+      if (isCompleted) acc.balance += credit;
     }
   }
 

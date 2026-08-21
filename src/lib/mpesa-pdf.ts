@@ -23,14 +23,14 @@
  * `src/lib/account-balances.ts`): the balance effect of a row is
  *   income    → +amount
  *   expense   → -amount
- *   transfer  → -amount   (source-account leg)
+ *   transfer  → +amount
  * So income/expense store a POSITIVE magnitude and the direction lives in the
  * `type`. Transfers are the only rows that can go either way on a single
- * account, so we store a SIGNED amount whose NEGATION is the real balance
- * movement: money that LEAVES (Transferência para / pagamento a banco) is
- * stored POSITIVE (like every CPC/Moza transfer), money that ENTERS
- * (Transferência recebida) is stored NEGATIVE — that way `-amount` adds it
- * back to the balance and the account calibrates exactly like the CSV imports.
+ * account, so we store a SIGNED amount EQUAL to the real balance movement:
+ * money that ENTERS (Transferência recebida) is stored POSITIVE, money that
+ * LEAVES (Transferência para / pagamento a banco) is stored NEGATIVE — that
+ * way `+amount` moves the balance the right way and an incoming transfer ADDS
+ * to the receiving account, exactly like the CSV imports.
  */
 
 import type { ImportResult, ImportedTransaction } from "./mobills-import";
@@ -253,9 +253,11 @@ export function parseMpesaPdfItems(items: MpesaTextItem[]): ImportResult {
     // Real balance movement (money in positive, money out negative).
     const realMovement = credito > 0 ? credito : -Math.abs(debito);
 
-    // A base de dados exige `amount > 0`, por isso guardamos SEMPRE a magnitude
-    // positiva (como os importadores CSV/Excel); a direcção vem do `type`.
-    const amount = magnitude;
+    // Receitas/despesas guardam a magnitude positiva (direcção no `type`).
+    // Transferências guardam valor COM SINAL: uma transferência RECEBIDA soma ao
+    // saldo (+), uma transferência ENVIADA subtrai (−) — igual ao efeito real no
+    // saldo, para que `account-balances.ts` some `+amount` e calibre certo.
+    const amount = type === "transfer" ? realMovement : magnitude;
 
     // The first anchor in file order is the earliest transaction (the PDF is
     // chronological top→down). Its opening = saldo − realMovement.
