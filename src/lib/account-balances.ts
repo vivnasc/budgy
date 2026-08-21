@@ -14,6 +14,11 @@
  * Transactions categorised as "Ajuste de Saldo" still count (they represent
  * calibration entries the user explicitly created). They're filtered out of
  * income/expense pies elsewhere, but the running balance must include them.
+ *
+ * Balance convention (stable): income → +amount, expense → -amount,
+ * transfer → -amount on the source account and +amount on
+ * `transfer_to_account_id`. Amounts are always stored as positive magnitudes;
+ * the direction lives in `type`.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
