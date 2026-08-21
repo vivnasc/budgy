@@ -248,3 +248,116 @@ export async function restoreBackup(backup: BudgyBackup): Promise<RestoreResult>
 
   return { restored, duplicates };
 }
+
+// ─── Restauro SUBSTITUINDO tudo (apaga → restaura → corrige transferências) ────
+
+/**
+ * Os 3 passos com efeito no servidor do restauro-substituição, mais um estado
+ * final. O UI usa isto para mostrar o progresso passo-a-passo.
+ */
+export type RestoreReplaceStep = "delete" | "restore" | "fix-transfers" | "done";
+
+/**
+ * Resultado combinado do restauro-substituição: quantas transações foram
+ * repostas e o resumo da correcção de transferências (sinais + saldos).
+ */
+export interface RestoreReplaceResult {
+  restored: number;
+  duplicates: number;
+  reclassified: number;
+  resigned: number;
+  fixMessage: string;
+}
+
+/**
+ * Um passo do restauro-substituição falhou. Guarda QUAL passo, para o UI poder
+ * dizer à utilizadora exactamente onde parou (ela mantém sempre o ficheiro).
+ */
+export class RestoreReplaceError extends Error {
+  step: RestoreReplaceStep;
+  constructor(step: RestoreReplaceStep, message: string) {
+    super(message);
+    this.name = "RestoreReplaceError";
+    this.step = step;
+  }
+}
+
+/**
+ * Restaura SUBSTITUINDO os dados actuais por um backup, num só fluxo:
+ *
+ *   1. `delete`        — apaga TODAS as transações actuais (DELETE /api/transactions).
+ *   2. `restore`       — repõe as transações do backup (reutiliza `restoreBackup`;
+ *                        como a BD ficou vazia, isto é uma substituição completa).
+ *   3. `fix-transfers` — corrige sinais/classificação das transferências e
+ *                        recalcula saldos (POST /api/transactions/fix-transfers).
+ *                        Necessário porque o backup foi feito ANTES do motor de
+ *                        transferências assinadas. É idempotente — correr duas
+ *                        vezes é um no-op.
+ *
+ * `onStep(step)` é chamado no INÍCIO de cada passo para o UI mostrar o progresso.
+ * Em erro lança `RestoreReplaceError` com o passo que falhou — nunca deixa o UI
+ * preso e a utilizadora mantém sempre o ficheiro de backup.
+ */
+export async function restoreReplaceAll(
+  backup: BudgyBackup,
+  onStep?: (step: RestoreReplaceStep) => void
+): Promise<RestoreReplaceResult> {
+  // 1. Apagar tudo
+  onStep?.("delete");
+  {
+    let res: Response;
+    try {
+      res = await fetch("/api/transactions", { method: "DELETE" });
+    } catch {
+      throw new RestoreReplaceError("delete", "Erro de rede ao apagar os dados atuais.");
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new RestoreReplaceError("delete", data.error || "Erro ao apagar os dados atuais.");
+    }
+  }
+
+  // 2. Restaurar do backup (BD vazia → substituição completa)
+  onStep?.("restore");
+  let restore: RestoreResult;
+  try {
+    restore = await restoreBackup(backup);
+  } catch (e) {
+    throw new RestoreReplaceError(
+      "restore",
+      e instanceof Error ? e.message : "Erro ao restaurar as transações do backup."
+    );
+  }
+
+  // 3. Corrigir transferências (sinais + saldos)
+  onStep?.("fix-transfers");
+  let fixData: { reclassified?: number; resigned?: number; message?: string; success?: boolean; error?: string };
+  {
+    let res: Response;
+    try {
+      res = await fetch("/api/transactions/fix-transfers", { method: "POST" });
+    } catch {
+      throw new RestoreReplaceError(
+        "fix-transfers",
+        "Erro de rede ao corrigir as transferências. As transações foram restauradas — podes correr 'Corrigir transferências' outra vez."
+      );
+    }
+    fixData = await res.json().catch(() => ({}));
+    if (!res.ok || !fixData.success) {
+      throw new RestoreReplaceError(
+        "fix-transfers",
+        fixData.error ||
+          "Erro ao corrigir as transferências. As transações foram restauradas — podes correr 'Corrigir transferências' outra vez."
+      );
+    }
+  }
+
+  onStep?.("done");
+  return {
+    restored: restore.restored,
+    duplicates: restore.duplicates,
+    reclassified: typeof fixData.reclassified === "number" ? fixData.reclassified : 0,
+    resigned: typeof fixData.resigned === "number" ? fixData.resigned : 0,
+    fixMessage: fixData.message || "Saldos corrigidos.",
+  };
+}

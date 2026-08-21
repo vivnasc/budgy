@@ -31,7 +31,11 @@ import {
   downloadBackup,
   parseBackup,
   restoreBackup,
+  restoreReplaceAll,
+  RestoreReplaceError,
   type BudgyBackup,
+  type RestoreReplaceStep,
+  type RestoreReplaceResult,
 } from "@/lib/backup";
 import type { ParsedSMS } from "@/lib/sms-parser";
 import type { ImportResult } from "@/lib/mobills-import";
@@ -334,6 +338,54 @@ function BackupRestoreSection() {
     }
   };
 
+  // ── Restaurar SUBSTITUINDO tudo (apaga → restaura → corrige transferências) ──
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const [replaceBackup, setReplaceBackup] = useState<BudgyBackup | null>(null);
+  const [replaceStep, setReplaceStep] = useState<RestoreReplaceStep | null>(null);
+  const [replaceResult, setReplaceResult] = useState<RestoreReplaceResult | null>(null);
+  const [replaceErr, setReplaceErr] = useState<{ step: RestoreReplaceStep | null; message: string } | null>(null);
+
+  const replaceRunning = replaceStep !== null && replaceStep !== "done" && !replaceResult && !replaceErr;
+
+  const handleReplaceFilePicked = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (replaceInputRef.current) replaceInputRef.current.value = "";
+    if (!file) return;
+
+    setReplaceErr(null);
+    setReplaceResult(null);
+    setReplaceStep(null);
+    setReplaceBackup(null);
+    try {
+      const text = await file.text();
+      const backup = parseBackup(text);
+      setReplaceBackup(backup);
+    } catch (e) {
+      setReplaceErr({ step: null, message: e instanceof Error ? e.message : "Ficheiro inválido." });
+    }
+  };
+
+  const handleConfirmReplace = async () => {
+    if (!replaceBackup) return;
+    setReplaceErr(null);
+    setReplaceResult(null);
+    setReplaceStep("delete");
+    try {
+      const result = await restoreReplaceAll(replaceBackup, (step) => setReplaceStep(step));
+      setReplaceResult(result);
+      setReplaceBackup(null);
+      // Recarrega para o painel/contas reflectirem os dados repostos e saldos.
+      setTimeout(() => window.location.reload(), 2400);
+    } catch (e) {
+      if (e instanceof RestoreReplaceError) {
+        setReplaceErr({ step: e.step, message: e.message });
+      } else {
+        setReplaceErr({ step: null, message: e instanceof Error ? e.message : "Erro ao restaurar." });
+      }
+      setReplaceStep(null);
+    }
+  };
+
   return (
     <div className="mt-10 pt-6 border-t border-gray-100 space-y-4">
       <div className="bg-emerald-50 rounded-2xl border border-emerald-100 p-4">
@@ -442,6 +494,157 @@ function BackupRestoreSection() {
           </div>
         </div>
       </div>
+
+      {/* Restaurar tudo (substituir os dados atuais) */}
+      <div className="bg-orange-50 rounded-2xl border border-orange-200 p-4">
+        <div className="flex items-start gap-3">
+          <RefreshCw className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-orange-900">
+              Restaurar tudo (substituir os dados atuais)
+            </h3>
+            <p className="text-xs text-orange-700 mt-1 leading-relaxed">
+              Recomeça a partir de um backup <span className="font-mono">.json</span> num só clique:
+              <strong> APAGA as transações atuais</strong>, repõe as do backup e corrige as
+              transferências (sinais e saldos). Ideal quando os dados atuais ficaram confusos e tens
+              um backup bom. As contas são recriadas a partir do backup.
+            </p>
+
+            <input
+              ref={replaceInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={handleReplaceFilePicked}
+              className="hidden"
+            />
+
+            {replaceResult ? (
+              <div className="mt-4 rounded-xl bg-white border border-emerald-100 p-3">
+                <p className="text-xs text-emerald-800 font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                  {replaceResult.restored} transações restauradas, saldos corrigidos.
+                </p>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  {replaceResult.fixMessage} A recarregar...
+                </p>
+              </div>
+            ) : replaceRunning || replaceStep === "done" ? (
+              <div className="mt-4 rounded-xl bg-white border border-orange-100 p-3 space-y-2">
+                <ReplaceProgressStep
+                  label="1. Apagar transações atuais"
+                  state={stepState("delete", replaceStep)}
+                />
+                <ReplaceProgressStep
+                  label="2. Restaurar do backup"
+                  state={stepState("restore", replaceStep)}
+                />
+                <ReplaceProgressStep
+                  label="3. Corrigir transferências e saldos"
+                  state={stepState("fix-transfers", replaceStep)}
+                />
+              </div>
+            ) : replaceBackup ? (
+              <div className="mt-4 rounded-xl bg-white border border-orange-200 p-3">
+                <p className="text-xs text-orange-900 font-semibold flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <span>
+                    Isto vai <strong>SUBSTITUIR</strong> as transações atuais por{" "}
+                    {replaceBackup.transactions.length} do backup
+                    {replaceBackup.exported_at
+                      ? ` (de ${replaceBackup.exported_at.split("T")[0]})`
+                      : ""}
+                    . As atuais serão apagadas. Tens a certeza?
+                  </span>
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleConfirmReplace}
+                    className="inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Sim, substituir tudo
+                  </button>
+                  <button
+                    onClick={() => setReplaceBackup(null)}
+                    className="text-xs font-semibold bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => replaceInputRef.current?.click()}
+                className="mt-4 inline-flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold"
+              >
+                <Upload className="w-4 h-4" />
+                Escolher backup e substituir tudo
+              </button>
+            )}
+
+            {replaceErr && (
+              <p className="text-xs text-red-700 mt-2">
+                {replaceErr.step ? `Falhou no passo "${stepLabel(replaceErr.step)}": ` : ""}
+                {replaceErr.message}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Progresso do restauro-substituição ──────────────────────────────────────
+
+type StepVisualState = "pending" | "running" | "done";
+
+/** Ordem dos passos com efeito, para comparar contra o passo atual. */
+const REPLACE_STEP_ORDER: RestoreReplaceStep[] = ["delete", "restore", "fix-transfers", "done"];
+
+function stepState(step: RestoreReplaceStep, current: RestoreReplaceStep | null): StepVisualState {
+  if (!current) return "pending";
+  const idx = REPLACE_STEP_ORDER.indexOf(step);
+  const curIdx = REPLACE_STEP_ORDER.indexOf(current);
+  if (curIdx > idx) return "done";
+  if (curIdx === idx) return "running";
+  return "pending";
+}
+
+function stepLabel(step: RestoreReplaceStep): string {
+  switch (step) {
+    case "delete":
+      return "apagar dados atuais";
+    case "restore":
+      return "restaurar do backup";
+    case "fix-transfers":
+      return "corrigir transferências";
+    default:
+      return "concluir";
+  }
+}
+
+function ReplaceProgressStep({ label, state }: { label: string; state: StepVisualState }) {
+  return (
+    <div className="flex items-center gap-2">
+      {state === "done" ? (
+        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+      ) : state === "running" ? (
+        <Loader2 className="w-4 h-4 text-orange-600 animate-spin flex-shrink-0" />
+      ) : (
+        <div className="w-4 h-4 rounded-full border-2 border-gray-200 flex-shrink-0" />
+      )}
+      <span
+        className={`text-xs ${
+          state === "done"
+            ? "text-emerald-700 font-medium"
+            : state === "running"
+            ? "text-orange-800 font-semibold"
+            : "text-gray-400"
+        }`}
+      >
+        {label}
+      </span>
     </div>
   );
 }
