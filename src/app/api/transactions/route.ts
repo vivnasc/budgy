@@ -326,7 +326,15 @@ function stripVirtualFields(tx: RawTxInput): Record<string, unknown> {
 }
 
 function normalizeAccountKey(name: string): string {
-  return name.trim().toLowerCase();
+  // Reconhece a MESMA conta apesar de espaços/hífens/acentos diferentes, para
+  // que "Mozabanco" ≡ "Moza Banco", "Mpesa" ≡ "M-Pesa", "StandardBank" ≡
+  // "Standard Bank" e o import NUNCA crie contas duplicadas.
+  return name
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\s\-_.]/g, "");
 }
 
 function buildDedupKey(
