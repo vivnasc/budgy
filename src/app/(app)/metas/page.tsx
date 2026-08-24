@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { GoalCard } from "@/components/goal-card";
 import { QuickCreateModal } from "@/components/quick-create-modal";
+import { GoalManageModal } from "@/components/goal-manage-modal";
 import { useGoals } from "@/hooks/use-supabase-data";
 
 const GOAL_COLORS = ["bg-emerald-500", "bg-blue-500", "bg-amber-500", "bg-purple-500", "bg-rose-500", "bg-teal-500", "bg-indigo-500"];
@@ -17,6 +18,7 @@ const GOAL_COLORS = ["bg-emerald-500", "bg-blue-500", "bg-amber-500", "bg-purple
 export default function MetasPage() {
   const { data: goals, loading, refetch } = useGoals();
   const [creating, setCreating] = useState(false);
+  const [managingId, setManagingId] = useState<string | null>(null);
 
   const allGoals = goals ?? [];
   const activeGoals = allGoals.filter((g) => !g.is_completed);
@@ -120,6 +122,7 @@ export default function MetasPage() {
                       target={goal.target_amount}
                       deadline={goal.deadline ?? ""}
                       color={goal.color ?? GOAL_COLORS[i % GOAL_COLORS.length]!}
+                      onClick={() => setManagingId(goal.id)}
                     />
                   ))}
                 </div>
@@ -149,6 +152,7 @@ export default function MetasPage() {
                       deadline={goal.deadline ?? ""}
                       color={goal.color ?? GOAL_COLORS[i % GOAL_COLORS.length]!}
                       completed
+                      onClick={() => setManagingId(goal.id)}
                     />
                   ))}
                 </div>
@@ -182,6 +186,18 @@ export default function MetasPage() {
       {creating && (
         <QuickCreateModal kind="goal" onClose={() => setCreating(false)} onCreated={() => refetch()} />
       )}
+
+      {managingId && (() => {
+        const goal = allGoals.find((g) => g.id === managingId);
+        if (!goal) return null;
+        return (
+          <GoalManageModal
+            goal={goal}
+            onClose={() => setManagingId(null)}
+            onSaved={() => refetch()}
+          />
+        );
+      })()}
     </div>
   );
 }
