@@ -1188,6 +1188,14 @@ function PendingReviewList({
   );
   const visible = onlyToConfirm ? toConfirm : fresh;
 
+  // Com centenas/milhares de linhas, desenhar tudo trava o scroll. Mostramos só
+  // um bloco de cada vez (a importação guarda TODAS na mesma — o corte é só
+  // visual). "Mostrar mais" revela o bloco seguinte.
+  const CHUNK = 200;
+  const [shown, setShown] = useState(CHUNK);
+  const rendered = visible.slice(0, shown);
+  const remaining = visible.length - rendered.length;
+
   return (
     <div className="space-y-3">
       {toConfirm.length > 0 && (
@@ -1216,7 +1224,7 @@ function PendingReviewList({
         </div>
       )}
 
-      {visible.map((tx) => (
+      {rendered.map((tx) => (
         <PendingTransactionCard
           key={tx.id}
           transaction={tx}
@@ -1226,6 +1234,20 @@ function PendingReviewList({
           onTypeChange={(type) => onTypeChange(tx.id, type)}
         />
       ))}
+
+      {remaining > 0 && (
+        <button
+          onClick={() => setShown((n) => n + CHUNK)}
+          className="w-full text-sm font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl py-3 hover:bg-emerald-100 transition-colors"
+        >
+          Mostrar mais {Math.min(CHUNK, remaining)} (faltam {remaining})
+        </button>
+      )}
+      {visible.length > CHUNK && (
+        <p className="text-center text-[11px] text-gray-400">
+          As {visible.length} são todas importadas ao carregar em Importar — mesmo as não visíveis.
+        </p>
+      )}
     </div>
   );
 }
@@ -1921,8 +1943,24 @@ function ImportPreview({
     );
   };
 
+  // "Aprovar todas": marca todas as novas (não duplicadas) ainda pendentes como
+  // aprovadas de uma vez — para não teres de tocar em cada uma quando são
+  // centenas ou milhares. Aprende a decisão de cada.
+  const handleApproveAll = () => {
+    setPending((prev) =>
+      prev.map((tx) => {
+        if (tx.duplicate || tx.status === "rejected" || tx.status === "approved") return tx;
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category: tx.category });
+        return { ...tx, status: "approved" as const };
+      })
+    );
+  };
+
   // Guardamos tudo o que não foi rejeitado (as edições sobrepõem-se ao original).
   const toSave = pending.filter((tx) => tx.status !== "rejected");
+  const freshPending = pending.filter(
+    (tx) => !tx.duplicate && tx.status !== "rejected" && tx.status !== "approved"
+  ).length;
 
   const handleSaveToDatabase = async () => {
     setSaving(true);
@@ -2200,30 +2238,46 @@ function ImportPreview({
         </div>
       )}
 
-      {/* Import Button */}
+      {/* Barra de ação fixa (o "elevador"): sempre visível, para importares ou
+          aprovares todas sem teres de scrollar até ao fim — essencial quando são
+          centenas ou milhares de transações. */}
       {saved ? (
         <div className="w-full flex items-center justify-center gap-3 bg-emerald-100 text-emerald-700 font-semibold py-4 rounded-2xl">
           <CheckCircle2 className="w-5 h-5" />
           {toSave.length} transações importadas com sucesso!
         </div>
       ) : (
-        <button
-          className="w-full flex items-center justify-center gap-3 bg-emerald-500 text-white font-semibold py-4 rounded-2xl hover:bg-emerald-600 disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/20"
-          onClick={handleSaveToDatabase}
-          disabled={saving || toSave.length === 0}
-        >
-          {saving ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              A guardar...
-            </>
-          ) : (
-            <>
-              <Check className="w-5 h-5" />
-              Importar {toSave.length} transações
-            </>
+        <div className="sticky bottom-2 z-30 flex items-center gap-2 rounded-2xl bg-white/80 backdrop-blur-sm p-2 shadow-lg ring-1 ring-black/5">
+          {freshPending > 0 && (
+            <button
+              className="flex items-center justify-center gap-2 bg-white text-emerald-700 border border-emerald-200 font-semibold py-4 px-4 rounded-2xl hover:bg-emerald-50 disabled:opacity-50 transition-all flex-shrink-0"
+              onClick={handleApproveAll}
+              disabled={saving}
+              title="Aprovar todas as novas de uma vez"
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              <span className="hidden sm:inline">Aprovar todas ({freshPending})</span>
+              <span className="sm:hidden">Todas ({freshPending})</span>
+            </button>
           )}
-        </button>
+          <button
+            className="flex-1 flex items-center justify-center gap-3 bg-emerald-500 text-white font-semibold py-4 rounded-2xl hover:bg-emerald-600 disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/20"
+            onClick={handleSaveToDatabase}
+            disabled={saving || toSave.length === 0}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                A guardar...
+              </>
+            ) : (
+              <>
+                <Check className="w-5 h-5" />
+                Importar {toSave.length} transações
+              </>
+            )}
+          </button>
+        </div>
       )}
 
       {/* Generate PDF Report Button */}
