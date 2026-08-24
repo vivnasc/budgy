@@ -85,6 +85,31 @@ interface PendingTransaction {
   counterpart?: boolean;
   /** Nome da conta da transferência já guardada (o outro lado). */
   counterpartAccount?: string | null;
+  /**
+   * Já existe na base de dados (mesma conta + data + valor + descrição). É
+   * saltada automaticamente para não duplicar quando reimportas um extrato que
+   * se sobrepõe a dias já lançados.
+   */
+  duplicate?: boolean;
+}
+
+/**
+ * Assinatura de uma transação para deteção de duplicados entre uma importação
+ * e o que já está guardado. Junta conta + data + valor (em cêntimos) +
+ * descrição normalizada. Reimportar o MESMO extrato produz descrições
+ * idênticas, por isso a correspondência é exacta e não apanha transações
+ * diferentes por acaso.
+ */
+function dedupSignature(
+  accountName: string | null | undefined,
+  date: string,
+  amount: number,
+  description: string
+): string {
+  const acc = (accountName ?? "").trim().toLowerCase();
+  const cents = Math.round((Number(amount) || 0) * 100);
+  const desc = (description ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return `${acc}|${date}|${cents}|${desc}`;
 }
 
 // ─── Confirmação / categorias ────────────────────────────────────────────────
@@ -1156,10 +1181,12 @@ function PendingReviewList({
 }) {
   const [onlyToConfirm, setOnlyToConfirm] = useState(false);
 
-  const toConfirm = transactions.filter(
+  // Duplicados detectados (já existentes) são saltados — não entram na lista.
+  const fresh = transactions.filter((tx) => !tx.duplicate);
+  const toConfirm = fresh.filter(
     (tx) => needsConfirmation(tx) && tx.status === "pending"
   );
-  const visible = onlyToConfirm ? toConfirm : transactions;
+  const visible = onlyToConfirm ? toConfirm : fresh;
 
   return (
     <div className="space-y-3">
@@ -1810,6 +1837,53 @@ function ImportPreview({
   // Reconhece contrapartidas de transferências já guardadas do outro lado.
   useCounterpartMatching(pending, setPending);
 
+  // Deteção automática de duplicados contra o que já está guardado. Quando
+  // reimportas um extrato que se sobrepõe a dias já lançados, as transações que
+  // já existem (mesma conta + data + valor + descrição) são saltadas sozinhas —
+  // vês só as novas, sem teres de rejeitar à mão.
+  const { data: existingTx, loading: existingLoading } = useTransactions({
+    from: "2000-01-01",
+    limit: 100000,
+  });
+  const [dedupDone, setDedupDone] = useState(false);
+  const [dedupCount, setDedupCount] = useState(0);
+
+  useEffect(() => {
+    if (dedupDone || existingLoading || !existingTx) return;
+    // Multiset das assinaturas já guardadas (conta com repetições exactas).
+    const counts = new Map<string, number>();
+    for (const t of existingTx) {
+      const sig = dedupSignature(
+        t.accounts?.name ?? null,
+        t.date,
+        Number(t.amount) || 0,
+        t.description ?? ""
+      );
+      counts.set(sig, (counts.get(sig) ?? 0) + 1);
+    }
+    // Percorre os importados por ordem, consumindo uma ocorrência por match.
+    let found = 0;
+    const marks = pending.map((tx) => {
+      const sig = dedupSignature(tx.accountHint ?? null, tx.date, tx.amount, tx.description);
+      const c = counts.get(sig) ?? 0;
+      if (c > 0) {
+        counts.set(sig, c - 1);
+        found++;
+        return true;
+      }
+      return false;
+    });
+    if (found > 0) {
+      setPending((prev) =>
+        prev.map((tx, i) =>
+          marks[i] ? { ...tx, status: "rejected" as const, duplicate: true } : tx
+        )
+      );
+    }
+    setDedupCount(found);
+    setDedupDone(true);
+  }, [existingTx, existingLoading, dedupDone, pending]);
+
   const handleApprove = (id: string) => {
     setPending((prev) =>
       prev.map((tx) => {
@@ -2098,8 +2172,22 @@ function ImportPreview({
         </div>
       )}
 
+      {/* Duplicados saltados automaticamente (reimportação de dias já lançados) */}
+      {!saved && dedupCount > 0 && (
+        <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-blue-800 leading-relaxed">
+              <strong>{dedupCount}</strong> transaç{dedupCount !== 1 ? "ões já existiam" : "ão já existia"}{" "}
+              e {dedupCount !== 1 ? "foram saltadas" : "foi saltada"} automaticamente (dias que já
+              tinhas lançado). Vês só as <strong>novas</strong> em baixo.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Rever transações — detectar, questionar e aprender */}
-      {!saved && pending.length > 0 && (
+      {!saved && pending.some((tx) => !tx.duplicate) && (
         <div>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Rever transações</h3>
           <PendingReviewList
