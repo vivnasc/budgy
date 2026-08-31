@@ -56,11 +56,26 @@ export async function computeAccountBalances(
   supabase: SupabaseClient,
   userId: string
 ): Promise<Map<string, AccountBalances>> {
-  const { data: txs } = await supabase
-    .schema("money_schema")
-    .from("transactions")
-    .select("account_id, transfer_to_account_id, type, amount, status, date")
-    .eq("user_id", userId);
+  // Lê TODAS as transações com paginação. O Supabase/PostgREST devolve no
+  // máximo 1000 linhas por pedido — sem paginar, contas com mais de 1000
+  // transações eram calculadas a partir de um subconjunto arbitrário (e
+  // diferente a cada chamada, por não haver ordenação estável), o que fazia
+  // os saldos "dançar" e o "Acertar saldo" nunca assentar.
+  const PAGE = 1000;
+  const txs: TxRow[] = [];
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await supabase
+      .schema("money_schema")
+      .from("transactions")
+      .select("account_id, transfer_to_account_id, type, amount, status, date")
+      .eq("user_id", userId)
+      .order("id", { ascending: true })
+      .range(offset, offset + PAGE - 1);
+    if (error) throw new Error("Falha ao ler transações para o saldo: " + error.message);
+    const batch = (data || []) as TxRow[];
+    txs.push(...batch);
+    if (batch.length < PAGE) break;
+  }
 
   const endOfMonth = endOfCurrentMonthMaputoISO();
 
@@ -74,7 +89,7 @@ export async function computeAccountBalances(
     return cur;
   };
 
-  for (const tx of (txs || []) as TxRow[]) {
+  for (const tx of txs) {
     if (tx.status === "cancelled") continue;
     const amt = Number(tx.amount) || 0;
     const isCompleted = !tx.status || tx.status === "completed";
