@@ -89,8 +89,11 @@ export async function POST(request: Request) {
     if (body.transactions && Array.isArray(body.transactions)) {
       const incoming = body.transactions as RawTxInput[];
 
-      // Resolve account names → IDs (creating missing accounts)
-      const accountIds = await resolveAccountIds(supabase, user.id, incoming);
+      // Resolve account names → IDs (creating missing accounts). As contas
+      // criadas AGORA ficam registadas para poderem — e só elas — ser
+      // calibradas automaticamente.
+      const newlyCreatedAccounts = new Set<string>();
+      const accountIds = await resolveAccountIds(supabase, user.id, incoming, newlyCreatedAccounts);
 
       // Resolve category names → IDs
       const categoryIds = await resolveCategoryIds(supabase, user.id, incoming);
@@ -163,24 +166,33 @@ export async function POST(request: Request) {
         await persistAccountBalances(supabase, user.id, Array.from(touched));
       }
 
-      // Automatic calibration: if the import detected an opening balance in
-      // the bank statement (CPC's "OPENING BALANCE", Moza's "Saldo de
-      // Abertura", Standard Bank's running balance), create the Saldo de
-      // Abertura tx for that account so the balance matches reality without
-      // any manual computation. This runs even on an all-duplicate re-import.
+      // Calibração automática do saldo de abertura — APENAS para contas
+      // criadas AGORA (primeira importação dessa conta). Numa conta que já
+      // existe, o import nunca mexe no saldo de abertura: apagar e recalcular
+      // a abertura a partir de um extrato recente destruía o histórico e
+      // colapsava o saldo (ex: CPC ia para -7,2M). Depois da primeira vez,
+      // são as transações (já sem duplicados) que fazem o saldo evoluir.
       const opens = (body.openingBalances || []) as Array<{
         accountName: string;
         amount: number;
         date: string;
       }>;
       const calibrated: string[] = [];
+      const skippedCalibration: string[] = [];
       for (const ob of opens) {
         if (!ob?.accountName || typeof ob.amount !== "number") continue;
         const accId = accountIds.get(normalizeAccountKey(ob.accountName));
         if (!accId) continue;
+        if (!newlyCreatedAccounts.has(accId)) {
+          // Conta já existente — não tocar no saldo. A utilizadora ajusta
+          // manualmente com "Acertar saldo" se precisar.
+          skippedCalibration.push(ob.accountName);
+          continue;
+        }
         await applyOpeningBalance(supabase, user.id, accId, ob.amount, ob.date);
         calibrated.push(ob.accountName);
       }
+      void skippedCalibration;
 
       const insertedCount = Array.isArray(data) ? data.length : 0;
       return NextResponse.json({
@@ -363,7 +375,8 @@ function inferAccountType(name: string): AccountType {
 async function resolveAccountIds(
   supabase: SupabaseClient,
   userId: string,
-  txs: RawTxInput[]
+  txs: RawTxInput[],
+  createdOut?: Set<string>
 ): Promise<Map<string, string>> {
   const names = new Set<string>();
   for (const tx of txs) {
@@ -402,6 +415,10 @@ async function resolveAccountIds(
 
     for (const acc of (created || []) as { id: string; name: string }[]) {
       map.set(normalizeAccountKey(acc.name), acc.id);
+      // Regista as contas criadas AGORA — só estas podem ser calibradas
+      // automaticamente. Contas já existentes nunca são recalibradas num
+      // import (era o que estragava os saldos ao reimportar um extrato).
+      createdOut?.add(acc.id);
     }
   }
 
