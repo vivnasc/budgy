@@ -73,26 +73,16 @@ export async function POST(
       return NextResponse.json({ error: "Tens de enviar 'current_real_balance' ou 'amount'" }, { status: 400 });
     }
 
-    // Determine the date for the opening balance row: one day before the
-    // earliest transaction on this account, otherwise today.
-    const { data: earliest } = await supabase
-      .schema("money_schema")
-      .from("transactions")
-      .select("date")
-      .eq("user_id", user.id)
-      .eq("account_id", id)
-      .order("date", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    let openingDate: string;
-    if (earliest?.date) {
-      const d = new Date(earliest.date + "T00:00:00");
-      d.setDate(d.getDate() - 1);
-      openingDate = d.toISOString().split("T")[0]!;
-    } else {
-      openingDate = new Date().toISOString().split("T")[0]!;
-    }
+    // Âncora manual = o saldo REAL que a utilizadora vê no banco HOJE. Datamos
+    // a âncora em HOJE e guardamos o alvo nas tags, para que fique autoritária:
+    // importações posteriores de extratos (com data de fecho <= hoje) não a
+    // sobrepõem — o "Acertar saldo" manual manda.
+    const today = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().split("T")[0]!;
+    const openingDate = today;
+    const anchorTarget =
+      typeof body?.current_real_balance === "number"
+        ? Number(body.current_real_balance)
+        : null;
 
     if (openingAmount !== 0) {
       const isPositive = openingAmount > 0;
@@ -112,6 +102,10 @@ export async function POST(
           description: "Saldo de Abertura",
           date: openingDate,
           status: "completed",
+          tags:
+            anchorTarget !== null
+              ? ["__saldo_anchor__", String(anchorTarget), openingDate]
+              : undefined,
         });
       if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
     }

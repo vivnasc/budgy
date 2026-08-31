@@ -182,6 +182,12 @@ export function parseMpesaPdfItems(items: MpesaTextItem[]): ImportResult {
   // Back-derive the opening balance from the first chronological row so the
   // account calibrates like the CSV imports: opening = saldo − realMovement.
   let firstOpening: number | null = null;
+  // Saldo REAL de fecho: o `saldo` da linha cronologicamente mais recente.
+  // É a âncora do saldo (ver applyOpeningBalance).
+  let firstBal: number | null = null;
+  let firstBalDate = "";
+  let lastBal: number | null = null;
+  let lastBalDate = "";
 
   for (const a of anchors) {
     const receipt = a.str.trim();
@@ -260,6 +266,12 @@ export function parseMpesaPdfItems(items: MpesaTextItem[]): ImportResult {
     // The first anchor in file order is the earliest transaction (the PDF is
     // chronological top→down). Its opening = saldo − realMovement.
     if (firstOpening === null) firstOpening = saldo - realMovement;
+    if (firstBal === null) {
+      firstBal = saldo;
+      firstBalDate = date;
+    }
+    lastBal = saldo;
+    lastBalDate = date;
 
     if (!minDate || date < minDate) minDate = date;
     if (!maxDate || date > maxDate) maxDate = date;
@@ -290,6 +302,12 @@ export function parseMpesaPdfItems(items: MpesaTextItem[]): ImportResult {
     return emptyResult("Nenhuma transação M-Pesa encontrada no PDF");
   }
 
+  void firstOpening;
+  let closingBalance: number | null = null;
+  if (firstBal !== null && lastBal !== null) {
+    closingBalance = firstBalDate >= lastBalDate ? firstBal : lastBal;
+  }
+
   return {
     success: true,
     total: anchors.length,
@@ -298,9 +316,10 @@ export function parseMpesaPdfItems(items: MpesaTextItem[]): ImportResult {
     errors,
     categoryMapping: {},
     accountsFound: [ACCOUNT_NAME],
+    // Âncora do saldo = saldo de fecho real (linha mais recente) à data de fecho.
     openingBalances:
-      firstOpening !== null && minDate
-        ? [{ accountName: ACCOUNT_NAME, amount: firstOpening, date: minDate }]
+      closingBalance !== null && maxDate
+        ? [{ accountName: ACCOUNT_NAME, amount: closingBalance, date: maxDate }]
         : [],
     dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
     summary: { totalIncome, totalExpenses, totalTransfers, categoryCounts },

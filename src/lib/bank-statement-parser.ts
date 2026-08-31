@@ -247,6 +247,12 @@ export function parseCPCStatement(csvContent: string): ImportResult {
   let minDate = "";
   let maxDate = "";
   let openingBalance: { amount: number; date: string } | null = null;
+  // Saldo REAL de fecho: a coluna Balance (fields[6]) da linha cronologicamente
+  // mais recente. É a verdade do banco e serve de âncora do saldo.
+  let firstBal: number | null = null;
+  let firstBalDate = "";
+  let lastBal: number | null = null;
+  let lastBalDate = "";
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!;
@@ -319,6 +325,17 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     // Track stats
     if (!minDate || date < minDate) minDate = date;
     if (!maxDate || date > maxDate) maxDate = date;
+    // Running balance (coluna Balance) para derivar o saldo de fecho real.
+    const balRaw = fields[6] ?? "";
+    if (/\d/.test(balRaw)) {
+      const balCol = parseCPCAmount(balRaw);
+      if (firstBal === null) {
+        firstBal = balCol;
+        firstBalDate = date;
+      }
+      lastBal = balCol;
+      lastBalDate = date;
+    }
     if (type === "income") totalIncome += amount;
     else if (type === "expense") totalExpenses += amount;
     else totalTransfers += amount;
@@ -349,6 +366,16 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     openingBalance.date = minDate;
   }
 
+  // Saldo de fecho real = running balance da linha cronologicamente mais
+  // recente. É a âncora do saldo (ver applyOpeningBalance). Fallback: derivar
+  // do opening + movimentos, se a coluna Balance não existir.
+  let closingBalance: number | null = null;
+  if (firstBal !== null && lastBal !== null) {
+    closingBalance = firstBalDate >= lastBalDate ? firstBal : lastBal;
+  } else if (openingBalance) {
+    closingBalance = openingBalance.amount + (totalIncome - totalExpenses - totalTransfers);
+  }
+
   return {
     success: imported.length > 0,
     total: lines.length - 1,
@@ -357,9 +384,10 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     errors,
     categoryMapping: {},
     accountsFound: Array.from(accountsSet),
-    openingBalances: openingBalance
-      ? [{ accountName: "CPC", amount: openingBalance.amount, date: openingBalance.date }]
-      : [],
+    openingBalances:
+      closingBalance !== null && maxDate
+        ? [{ accountName: "CPC", amount: closingBalance, date: maxDate }]
+        : [],
     dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
     summary: { totalIncome, totalExpenses, totalTransfers, categoryCounts },
   };
@@ -509,6 +537,9 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
   // format: "Saldo de Abertura: ;170896,25" (semi-colon separated).
   let openingAmount: number | null = null;
   let openingDate: string | null = null;
+  // Saldo de fecho real, lido do cabeçalho ("Saldo de fecho: ;292261,03").
+  // É a âncora do saldo. Fallback: running balance da última linha.
+  let closingFromHeader: number | null = null;
   for (let i = 0; i < headerIndex; i++) {
     const ln = lines[i]!;
     if (/saldo\s*de\s*abertura/i.test(ln)) {
@@ -522,6 +553,16 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
           break;
         }
       }
+    } else if (/saldo\s*de\s*fecho/i.test(ln)) {
+      const parts = ln.split(";").map((p) => p.trim().replace(/^"|"$/g, ""));
+      for (const p of parts) {
+        if (/saldo|fecho/i.test(p)) continue;
+        const n = parseMozaAmount(p);
+        if (n !== 0) {
+          closingFromHeader = n;
+          break;
+        }
+      }
     }
   }
 
@@ -532,6 +573,10 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
   let totalTransfers = 0;
   let minDate = "";
   let maxDate = "";
+  let firstBal: number | null = null;
+  let firstBalDate = "";
+  let lastBal: number | null = null;
+  let lastBalDate = "";
 
   for (let i = headerIndex + 1; i < lines.length; i++) {
     const line = lines[i]!;
@@ -553,6 +598,18 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
     if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) {
       skipped++;
       continue;
+    }
+
+    // Running balance (coluna Saldo, fields[6]) para o saldo de fecho real.
+    const balRaw = fields[6] ?? "";
+    if (/\d/.test(balRaw)) {
+      const balCol = parseMozaAmount(balRaw);
+      if (firstBal === null) {
+        firstBal = balCol;
+        firstBalDate = date;
+      }
+      lastBal = balCol;
+      lastBalDate = date;
     }
 
     const debit = parseMozaAmount(debitRaw);
@@ -632,6 +689,17 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
   if (openingAmount !== null && minDate) {
     openingDate = minDate;
   }
+  void openingDate;
+
+  // Saldo de fecho real: cabeçalho "Saldo de fecho" ou, em falta, o running
+  // balance da última linha; fallback final: opening + movimentos.
+  let closingBalance: number | null = closingFromHeader;
+  if (closingBalance === null && firstBal !== null && lastBal !== null) {
+    closingBalance = firstBalDate >= lastBalDate ? firstBal : lastBal;
+  }
+  if (closingBalance === null && openingAmount !== null) {
+    closingBalance = openingAmount + (totalIncome - totalExpenses - totalTransfers);
+  }
 
   return {
     success: imported.length > 0,
@@ -642,8 +710,8 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
     categoryMapping: {},
     accountsFound: Array.from(accountsSet),
     openingBalances:
-      openingAmount !== null && openingDate
-        ? [{ accountName: "Moza Banco", amount: openingAmount, date: openingDate }]
+      closingBalance !== null && maxDate
+        ? [{ accountName: "Moza Banco", amount: closingBalance, date: maxDate }]
         : [],
     dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
     summary: { totalIncome, totalExpenses, totalTransfers, categoryCounts },
@@ -996,11 +1064,11 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
   // all movements in the file, anchored to the earliest transaction date.
   // applyOpeningBalance then sums zero movements before it (first import) and
   // calibrates the account to the real closing balance.
+  // Ancorar no saldo de fecho REAL (última linha) à data de fecho (maxDate).
+  // applyOpeningBalance calibra a conta para este número sem destruir histórico.
   let openingBalances: Array<{ accountName: string; amount: number; date: string }> = [];
-  if (closingBalance !== null && minDate) {
-    const netSigned = totalIncome - totalExpenses - totalTransfers;
-    const openingAmount = closingBalance - netSigned;
-    openingBalances = [{ accountName: "Standard Bank", amount: openingAmount, date: minDate }];
+  if (closingBalance !== null && maxDate) {
+    openingBalances = [{ accountName: "Standard Bank", amount: closingBalance, date: maxDate }];
   }
 
   return {
