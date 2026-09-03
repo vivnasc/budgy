@@ -19,11 +19,12 @@ import {
   GraduationCap,
   Heart,
   Smartphone,
+  X,
 } from "lucide-react";
 import { TransactionItem } from "@/components/transaction-item";
 import { AddTransactionModal } from "@/components/add-transaction-modal";
 import { TransactionDetailModal } from "@/components/transaction-detail-modal";
-import { useTransactions, useLatestMonthOffset, useTransactionStats } from "@/hooks/use-supabase-data";
+import { useTransactions, useLatestMonthOffset, useTransactionStats, useAccounts } from "@/hooks/use-supabase-data";
 import type { Transaction } from "@/lib/supabase/types";
 
 type FilterType = "all" | "income" | "expense" | "transfer";
@@ -82,8 +83,12 @@ export default function TransacoesPage() {
   const [filter, setFilter] = useState<FilterType>("all");
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+
+  const { data: accounts } = useAccounts();
 
   // Saltar para o mês mais recente com dados na primeira carga
   useEffect(() => {
@@ -99,16 +104,45 @@ export default function TransacoesPage() {
       : { type: typeFilter, from, to, limit: 1000 }
   );
 
+  // Categorias presentes na vista actual (para o dropdown)
+  const categoryOptions = useMemo(() => {
+    if (!transactions) return [];
+    const names = new Set<string>();
+    for (const tx of transactions) {
+      const name = tx.categories?.name;
+      if (name) names.add(name);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "pt"));
+  }, [transactions]);
+
   const filteredTransactions = useMemo(() => {
     if (!transactions) return [];
-    if (!searchQuery) return transactions;
-    const q = searchQuery.toLowerCase();
-    return transactions.filter(
-      (tx) =>
-        (tx.description ?? "").toLowerCase().includes(q) ||
-        (tx.categories?.name ?? "").toLowerCase().includes(q)
-    );
-  }, [transactions, searchQuery]);
+    const q = searchQuery.trim().toLowerCase();
+    return transactions.filter((tx) => {
+      // Filtro por conta (account_id)
+      if (selectedAccount && tx.account_id !== selectedAccount) return false;
+      // Filtro por categoria (por nome)
+      if (selectedCategory && (tx.categories?.name ?? "") !== selectedCategory) return false;
+      // Procura por texto (descrição ou categoria)
+      if (q) {
+        const hit =
+          (tx.description ?? "").toLowerCase().includes(q) ||
+          (tx.categories?.name ?? "").toLowerCase().includes(q);
+        if (!hit) return false;
+      }
+      return true;
+    });
+  }, [transactions, searchQuery, selectedAccount, selectedCategory]);
+
+  const hasActiveFilters =
+    filter !== "all" || searchQuery.trim() !== "" || selectedAccount !== null || selectedCategory !== null;
+
+  const clearFilters = () => {
+    setFilter("all");
+    setSearchQuery("");
+    setSelectedAccount(null);
+    setSelectedCategory(null);
+  };
 
   const grouped = groupByDate(filteredTransactions);
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
@@ -177,8 +211,8 @@ export default function TransacoesPage() {
           </button>
         </div>
 
-        {/* Filter tabs */}
-        <div className="flex gap-2">
+        {/* Filter tabs (tipo) */}
+        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-0.5">
           {[
             { key: "all" as FilterType, label: "Tudo" },
             { key: "income" as FilterType, label: "Receitas", icon: ArrowUpRight },
@@ -188,7 +222,7 @@ export default function TransacoesPage() {
             <button
               key={key}
               onClick={() => setFilter(key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors shrink-0 ${
                 filter === key
                   ? "bg-primary-500 text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -198,6 +232,64 @@ export default function TransacoesPage() {
               {label}
             </button>
           ))}
+        </div>
+
+        {/* Filtro por conta */}
+        {accounts && accounts.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto -mx-4 px-4 mt-2 pb-0.5">
+            <button
+              onClick={() => setSelectedAccount(null)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors shrink-0 ${
+                selectedAccount === null
+                  ? "bg-emerald-500 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              <Wallet className="w-3 h-3" />
+              Todas
+            </button>
+            {accounts.map((acc) => (
+              <button
+                key={acc.id}
+                onClick={() => setSelectedAccount(acc.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors shrink-0 ${
+                  selectedAccount === acc.id
+                    ? "bg-emerald-500 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {acc.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Filtro por categoria + limpar */}
+        <div className="flex items-center gap-2 mt-2">
+          <select
+            value={selectedCategory ?? ""}
+            onChange={(e) => setSelectedCategory(e.target.value || null)}
+            className="flex-1 min-w-0 px-3 py-1.5 bg-gray-100 rounded-full text-xs font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          >
+            <option value="">Todas as categorias</option>
+            {selectedCategory && !categoryOptions.includes(selectedCategory) && (
+              <option value={selectedCategory}>{selectedCategory}</option>
+            )}
+            {categoryOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-red-500 bg-red-500/10 hover:bg-red-500/20 transition-colors shrink-0"
+            >
+              <X className="w-3 h-3" />
+              Limpar
+            </button>
+          )}
         </div>
       </header>
 

@@ -235,9 +235,17 @@ export default function DividasPage() {
         {sortedDebts.length === 0 && (
           <div className="text-center py-12">
             <CheckCircle2 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-[var(--color-text-muted)]">
+            <p className="text-sm text-[var(--color-text-muted)] mb-4">
               {allDebts.length === 0 ? "Sem dívidas registadas" : "Nenhuma dívida encontrada"}
             </p>
+            {allDebts.length === 0 && (
+              <button
+                onClick={() => setCreating(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 active:scale-95 transition-all"
+              >
+                <Plus className="w-4 h-4" /> Registar dívida
+              </button>
+            )}
           </div>
         )}
       </main>

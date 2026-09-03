@@ -10,6 +10,7 @@ interface GoalCardProps {
   deadline: string;
   color: string;
   completed?: boolean;
+  onClick?: () => void;
 }
 
 function getDeadlineCountdown(deadline: string): string {
@@ -40,15 +41,29 @@ export function GoalCard({
   deadline,
   color,
   completed = false,
+  onClick,
 }: GoalCardProps) {
   const percentage = Math.min((current / target) * 100, 100);
   const countdown = getDeadlineCountdown(deadline);
 
   return (
     <div
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
       className={`card p-4 relative overflow-hidden ${
         completed ? "opacity-75" : ""
-      }`}
+      } ${onClick ? "cursor-pointer hover:shadow-md active:scale-[0.98] transition-all" : ""}`}
     >
       {completed && (
         <div className="absolute top-2 right-2">

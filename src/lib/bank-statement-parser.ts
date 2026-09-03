@@ -14,7 +14,7 @@ import { autoCategorize } from "./auto-categorize";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type BankFormat = "cpc" | "moza" | "standard-bank" | "mobills" | "auto";
+export type BankFormat = "cpc" | "moza" | "standard-bank" | "mobills" | "mpesa" | "auto";
 
 export interface BankInfo {
   id: BankFormat;
@@ -59,6 +59,13 @@ export const SUPPORTED_BANK_FORMATS: BankInfo[] = [
     description: "Ficheiro Excel (.xlsx) do banco",
     fileTypes: [".xlsx"],
     icon: "building",
+  },
+  {
+    id: "mpesa",
+    name: "Extrato M-Pesa (PDF)",
+    description: "Extracto da Conta M-Pesa em PDF",
+    fileTypes: [".pdf"],
+    icon: "smartphone",
   },
 ];
 
@@ -153,6 +160,70 @@ function extractCPCDescription(raw: string): { description: string; merchant: st
   return { description: raw.trim(), merchant: raw.trim() };
 }
 
+export interface CpcClassification {
+  /** Descrição pronta a mostrar (comerciante quando existe, senão a descrição). */
+  displayDescription: string;
+  type: "income" | "expense" | "transfer";
+  category: string;
+  /** Categorização com baixa confiança — vale a pena a utilizadora rever. */
+  needsReview: boolean;
+}
+
+/**
+ * Classifica um movimento CPC a partir da descrição bruta, do valor (magnitude
+ * positiva) e da direção (crédito = entrada / débito = saída).
+ *
+ * Fonte única de verdade partilhada pelo leitor de CSV do CPC (`parseCPCStatement`)
+ * e pela funcionalidade "Colar transacções" (`paste-parser.ts`) — assim as regras
+ * de tipo/categoria não são duplicadas.
+ */
+export function classifyCpcRecord(
+  descriptionRaw: string,
+  amount: number,
+  isCredit: boolean
+): CpcClassification {
+  const { description, merchant } = extractCPCDescription(descriptionRaw);
+
+  let type: "income" | "expense" | "transfer" = isCredit ? "income" : "expense";
+
+  // Detect transfers between the user's OWN accounts (CPC → Moza/Standard).
+  const metixBeneficiary = /Transf\.?\s+METIX\s+via\s+NIB\s+Enviada\s*(\S.*)?$/i.exec(descriptionRaw);
+  if (
+    /Transf(?:erencia)?\s+Interb/i.test(descriptionRaw) ||
+    /Transferencia\s+Intrab/i.test(descriptionRaw) ||
+    (metixBeneficiary !== null && !metixBeneficiary[1])
+  ) {
+    type = "transfer";
+  }
+
+  // Commissions are always an expense
+  if (/^Comissao/i.test(descriptionRaw)) {
+    type = "expense";
+  }
+
+  const searchText = `${merchant} ${description}`;
+  const categoryResult = autoCategorize(searchText, type, amount);
+
+  let mappedCategory = categoryResult.category;
+  if (/PAGAMENTO SALARIO/i.test(descriptionRaw)) mappedCategory = "Salário";
+  else if (/Prestacao Mensal Emprestimo/i.test(descriptionRaw)) mappedCategory = "Dívidas";
+  else if (/Comissao Trf/i.test(descriptionRaw)) mappedCategory = "Taxas Bancárias";
+  else if (/DIVIDENDOS/i.test(descriptionRaw)) mappedCategory = "Rendimento Passivo";
+  else if (/Regularizacao ATM/i.test(descriptionRaw)) mappedCategory = "Reembolso";
+  else if (/MINHA CONTA/i.test(descriptionRaw) || (type === "transfer" && /METIX|Conta a Conta/i.test(descriptionRaw))) mappedCategory = "Transferência";
+  else if (/Creche|CENTR\w*\s*INFANTIL|PIKINICO|Col[eé]gio|Escola/i.test(descriptionRaw)) mappedCategory = "Educação";
+  else if (/Adao\s+Baptista/i.test(descriptionRaw)) mappedCategory = "Compras";
+  else if (/Transf.+Breno|Transf.+Nazira/i.test(descriptionRaw)) mappedCategory = "Família";
+  else if (/Anuidade.*cart[aã]o|Imposto de selo/i.test(descriptionRaw)) mappedCategory = "Taxas Bancárias";
+
+  return {
+    displayDescription: merchant || description,
+    type,
+    category: mappedCategory,
+    needsReview: categoryResult.confidence < 0.5,
+  };
+}
+
 export function parseCPCStatement(csvContent: string): ImportResult {
   const errors: string[] = [];
   const imported: ImportedTransaction[] = [];
@@ -176,6 +247,12 @@ export function parseCPCStatement(csvContent: string): ImportResult {
   let minDate = "";
   let maxDate = "";
   let openingBalance: { amount: number; date: string } | null = null;
+  // Saldo REAL de fecho: a coluna Balance (fields[6]) da linha cronologicamente
+  // mais recente. É a verdade do banco e serve de âncora do saldo.
+  let firstBal: number | null = null;
+  let firstBalDate = "";
+  let lastBal: number | null = null;
+  let lastBalDate = "";
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]!;
@@ -240,71 +317,33 @@ export function parseCPCStatement(csvContent: string): ImportResult {
       continue;
     }
 
-    // Determine type
-    let type: "income" | "expense" | "transfer" = "expense";
-    const { description, merchant } = extractCPCDescription(descriptionRaw);
-
-    if (credit > 0) {
-      type = "income";
-    }
-
-    // Detect transfers between the user's OWN accounts (CPC → Moza/Standard).
-    // These move money between her own pockets — not income, not spending.
-    //  - "Transf ... Interb/Intrab"      → interbank between own accounts
-    //  - "Transf. METIX via NIB Enviada"  → own-account move ONLY when nothing
-    //                                       follows "Enviada". When a beneficiary
-    //                                       name follows (IB-...-Creche/Adao/...)
-    //                                       it is a real payment → stays expense.
-    //
-    // NOTE: "Transf. Conta a Conta - BALCAO" is intentionally NOT auto-tagged as
-    // a transfer. It's a generic counter transfer that can just as easily be a
-    // real payment to a third party (e.g. paying a builder for house works), so
-    // we leave it as an expense by default and let the user confirm/relabel it.
-    const metixBeneficiary = /Transf\.?\s+METIX\s+via\s+NIB\s+Enviada\s*(\S.*)?$/i.exec(descriptionRaw);
-    if (
-      /Transf(?:erencia)?\s+Interb/i.test(descriptionRaw) ||
-      /Transferencia\s+Intrab/i.test(descriptionRaw) ||
-      (metixBeneficiary !== null && !metixBeneficiary[1])
-    ) {
-      type = "transfer";
-    }
-
-    // Detect commissions as expense
-    if (/^Comissao/i.test(descriptionRaw)) {
-      type = "expense";
-    }
-
-    // Auto-categorize based on merchant/description
-    const searchText = `${merchant} ${description}`;
-    const categoryResult = autoCategorize(searchText, type, amount);
-
-    // Special CPC-specific categorization
-    let mappedCategory = categoryResult.category;
-    if (/PAGAMENTO SALARIO/i.test(descriptionRaw)) mappedCategory = "Salário";
-    else if (/Prestacao Mensal Emprestimo/i.test(descriptionRaw)) mappedCategory = "Dívidas";
-    else if (/Comissao Trf/i.test(descriptionRaw)) mappedCategory = "Taxas Bancárias";
-    else if (/DIVIDENDOS/i.test(descriptionRaw)) mappedCategory = "Rendimento Passivo";
-    else if (/Regularizacao ATM/i.test(descriptionRaw)) mappedCategory = "Reembolso";
-    else if (/MINHA CONTA/i.test(descriptionRaw) || (type === "transfer" && /METIX|Conta a Conta/i.test(descriptionRaw))) mappedCategory = "Transferência";
-    else if (/Creche|CENTR\w*\s*INFANTIL|PIKINICO|Col[eé]gio|Escola/i.test(descriptionRaw)) mappedCategory = "Educação";
-    else if (/Adao\s+Baptista/i.test(descriptionRaw)) mappedCategory = "Compras";
-    else if (/Transf.+Breno|Transf.+Nazira/i.test(descriptionRaw)) mappedCategory = "Família";
-    else if (/Anuidade.*cart[aã]o|Imposto de selo/i.test(descriptionRaw)) mappedCategory = "Taxas Bancárias";
+    // Classify (type + category + clean description) — shared with the paste flow.
+    const { displayDescription, type, category: mappedCategory, needsReview } =
+      classifyCpcRecord(descriptionRaw, amount, credit > 0);
+    const { description } = extractCPCDescription(descriptionRaw);
 
     // Track stats
     if (!minDate || date < minDate) minDate = date;
     if (!maxDate || date > maxDate) maxDate = date;
+    // Running balance (coluna Balance) para derivar o saldo de fecho real.
+    const balRaw = fields[6] ?? "";
+    if (/\d/.test(balRaw)) {
+      const balCol = parseCPCAmount(balRaw);
+      if (firstBal === null) {
+        firstBal = balCol;
+        firstBalDate = date;
+      }
+      lastBal = balCol;
+      lastBalDate = date;
+    }
     if (type === "income") totalIncome += amount;
     else if (type === "expense") totalExpenses += amount;
     else totalTransfers += amount;
     categoryCounts[mappedCategory] = (categoryCounts[mappedCategory] || 0) + 1;
 
-    // Build display description
-    const displayDesc = merchant || description;
-
     imported.push({
       date,
-      description: displayDesc,
+      description: displayDescription,
       originalCategory: description,
       mappedCategory,
       account: "CPC",
@@ -313,7 +352,7 @@ export function parseCPCStatement(csvContent: string): ImportResult {
       status: "completed",
       tags: txRef ? [txRef] : [],
       notes: descriptionRaw,
-      needsReview: categoryResult.confidence < 0.5,
+      needsReview,
     });
   }
 
@@ -327,6 +366,16 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     openingBalance.date = minDate;
   }
 
+  // Saldo de fecho real = running balance da linha cronologicamente mais
+  // recente. É a âncora do saldo (ver applyOpeningBalance). Fallback: derivar
+  // do opening + movimentos, se a coluna Balance não existir.
+  let closingBalance: number | null = null;
+  if (firstBal !== null && lastBal !== null) {
+    closingBalance = firstBalDate >= lastBalDate ? firstBal : lastBal;
+  } else if (openingBalance) {
+    closingBalance = openingBalance.amount + (totalIncome - totalExpenses - totalTransfers);
+  }
+
   return {
     success: imported.length > 0,
     total: lines.length - 1,
@@ -335,9 +384,10 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     errors,
     categoryMapping: {},
     accountsFound: Array.from(accountsSet),
-    openingBalances: openingBalance
-      ? [{ accountName: "CPC", amount: openingBalance.amount, date: openingBalance.date }]
-      : [],
+    openingBalances:
+      closingBalance !== null && maxDate
+        ? [{ accountName: "CPC", amount: closingBalance, date: maxDate }]
+        : [],
     dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
     summary: { totalIncome, totalExpenses, totalTransfers, categoryCounts },
   };
@@ -487,6 +537,9 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
   // format: "Saldo de Abertura: ;170896,25" (semi-colon separated).
   let openingAmount: number | null = null;
   let openingDate: string | null = null;
+  // Saldo de fecho real, lido do cabeçalho ("Saldo de fecho: ;292261,03").
+  // É a âncora do saldo. Fallback: running balance da última linha.
+  let closingFromHeader: number | null = null;
   for (let i = 0; i < headerIndex; i++) {
     const ln = lines[i]!;
     if (/saldo\s*de\s*abertura/i.test(ln)) {
@@ -500,6 +553,16 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
           break;
         }
       }
+    } else if (/saldo\s*de\s*fecho/i.test(ln)) {
+      const parts = ln.split(";").map((p) => p.trim().replace(/^"|"$/g, ""));
+      for (const p of parts) {
+        if (/saldo|fecho/i.test(p)) continue;
+        const n = parseMozaAmount(p);
+        if (n !== 0) {
+          closingFromHeader = n;
+          break;
+        }
+      }
     }
   }
 
@@ -510,6 +573,10 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
   let totalTransfers = 0;
   let minDate = "";
   let maxDate = "";
+  let firstBal: number | null = null;
+  let firstBalDate = "";
+  let lastBal: number | null = null;
+  let lastBalDate = "";
 
   for (let i = headerIndex + 1; i < lines.length; i++) {
     const line = lines[i]!;
@@ -531,6 +598,18 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
     if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) {
       skipped++;
       continue;
+    }
+
+    // Running balance (coluna Saldo, fields[6]) para o saldo de fecho real.
+    const balRaw = fields[6] ?? "";
+    if (/\d/.test(balRaw)) {
+      const balCol = parseMozaAmount(balRaw);
+      if (firstBal === null) {
+        firstBal = balCol;
+        firstBalDate = date;
+      }
+      lastBal = balCol;
+      lastBalDate = date;
     }
 
     const debit = parseMozaAmount(debitRaw);
@@ -610,6 +689,17 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
   if (openingAmount !== null && minDate) {
     openingDate = minDate;
   }
+  void openingDate;
+
+  // Saldo de fecho real: cabeçalho "Saldo de fecho" ou, em falta, o running
+  // balance da última linha; fallback final: opening + movimentos.
+  let closingBalance: number | null = closingFromHeader;
+  if (closingBalance === null && firstBal !== null && lastBal !== null) {
+    closingBalance = firstBalDate >= lastBalDate ? firstBal : lastBal;
+  }
+  if (closingBalance === null && openingAmount !== null) {
+    closingBalance = openingAmount + (totalIncome - totalExpenses - totalTransfers);
+  }
 
   return {
     success: imported.length > 0,
@@ -620,8 +710,8 @@ export function parseMozaBancoStatement(csvContent: string): ImportResult {
     categoryMapping: {},
     accountsFound: Array.from(accountsSet),
     openingBalances:
-      openingAmount !== null && openingDate
-        ? [{ accountName: "Moza Banco", amount: openingAmount, date: openingDate }]
+      closingBalance !== null && maxDate
+        ? [{ accountName: "Moza Banco", amount: closingBalance, date: maxDate }]
         : [],
     dateRange: minDate && maxDate ? { from: minDate, to: maxDate } : null,
     summary: { totalIncome, totalExpenses, totalTransfers, categoryCounts },
@@ -642,6 +732,28 @@ export async function parseExcelFile(
     const firstSheetName = workbook.SheetNames[0];
     if (!firstSheetName) {
       return emptyResult("Ficheiro Excel vazio");
+    }
+
+    // Deteção pelo CONTEÚDO — o nome do ficheiro pode enganar (ex.: um extrato
+    // Standard Bank exportado como "Movimentos_de_Conta_...xlsx" não tem
+    // "standard" no nome e cairia por engano no leitor do Mobills).
+    {
+      const sniffWs = workbook.Sheets[firstSheetName];
+      if (sniffWs) {
+        const sniff = XLSX.utils.sheet_to_csv(sniffWs, { FS: "," });
+        if (
+          /standard bank/i.test(sniff) ||
+          (/d[eé]bito/i.test(sniff) &&
+            /cr[eé]dito/i.test(sniff) &&
+            /saldo/i.test(sniff) &&
+            !/categoria/i.test(sniff))
+        ) {
+          format = "standard-bank";
+        } else {
+          const sniffed = detectBankFormat(sniff);
+          if (sniffed === "cpc" || sniffed === "moza") format = sniffed;
+        }
+      }
     }
 
     if (format === "mobills") {
@@ -876,8 +988,10 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
       lastBalanceDate = date;
     }
 
-    const debit = parseFlexibleAmount(row.debit ?? "");
-    const credit = parseFlexibleAmount(row.credit ?? "");
+    // O Standard Bank exporta os débitos com sinal negativo (ex.: "-686,26") e
+    // os créditos positivos. Usamos o valor absoluto — a direcção fica no tipo.
+    const debit = Math.abs(parseFlexibleAmount(row.debit ?? ""));
+    const credit = Math.abs(parseFlexibleAmount(row.credit ?? ""));
     const singleAmount = parseFlexibleAmount(row.amount ?? "");
 
     const amount = credit > 0 ? credit : debit > 0 ? debit : Math.abs(singleAmount);
@@ -950,11 +1064,11 @@ function parseStandardBankCSV(csvContent: string): ImportResult {
   // all movements in the file, anchored to the earliest transaction date.
   // applyOpeningBalance then sums zero movements before it (first import) and
   // calibrates the account to the real closing balance.
+  // Ancorar no saldo de fecho REAL (última linha) à data de fecho (maxDate).
+  // applyOpeningBalance calibra a conta para este número sem destruir histórico.
   let openingBalances: Array<{ accountName: string; amount: number; date: string }> = [];
-  if (closingBalance !== null && minDate) {
-    const netSigned = totalIncome - totalExpenses - totalTransfers;
-    const openingAmount = closingBalance - netSigned;
-    openingBalances = [{ accountName: "Standard Bank", amount: openingAmount, date: minDate }];
+  if (closingBalance !== null && maxDate) {
+    openingBalances = [{ accountName: "Standard Bank", amount: closingBalance, date: maxDate }];
   }
 
   return {

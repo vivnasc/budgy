@@ -89,8 +89,11 @@ export async function POST(request: Request) {
     if (body.transactions && Array.isArray(body.transactions)) {
       const incoming = body.transactions as RawTxInput[];
 
-      // Resolve account names → IDs (creating missing accounts)
-      const accountIds = await resolveAccountIds(supabase, user.id, incoming);
+      // Resolve account names → IDs (creating missing accounts). As contas
+      // criadas AGORA ficam registadas para poderem — e só elas — ser
+      // calibradas automaticamente.
+      const newlyCreatedAccounts = new Set<string>();
+      const accountIds = await resolveAccountIds(supabase, user.id, incoming, newlyCreatedAccounts);
 
       // Resolve category names → IDs
       const categoryIds = await resolveCategoryIds(supabase, user.id, incoming);
@@ -163,11 +166,16 @@ export async function POST(request: Request) {
         await persistAccountBalances(supabase, user.id, Array.from(touched));
       }
 
-      // Automatic calibration: if the import detected an opening balance in
-      // the bank statement (CPC's "OPENING BALANCE", Moza's "Saldo de
-      // Abertura", Standard Bank's running balance), create the Saldo de
-      // Abertura tx for that account so the balance matches reality without
-      // any manual computation. This runs even on an all-duplicate re-import.
+      // Calibração automática do saldo de abertura — APENAS para contas
+      // criadas AGORA (primeira importação dessa conta). Numa conta que já
+      // existe, o import nunca mexe no saldo de abertura: apagar e recalcular
+      // a abertura a partir de um extrato recente destruía o histórico e
+      // colapsava o saldo (ex: CPC ia para -7,2M). Depois da primeira vez,
+      // são as transações (já sem duplicados) que fazem o saldo evoluir.
+      // ob.amount = saldo de FECHO real do extrato; ob.date = data de fecho.
+      // A âncora é forward-only e nunca destrói histórico (ver
+      // applyOpeningBalance), por isso é seguro correr também em contas já
+      // existentes — o saldo passa a ser o do banco, sem acerto manual.
       const opens = (body.openingBalances || []) as Array<{
         accountName: string;
         amount: number;
@@ -175,12 +183,13 @@ export async function POST(request: Request) {
       }>;
       const calibrated: string[] = [];
       for (const ob of opens) {
-        if (!ob?.accountName || typeof ob.amount !== "number") continue;
+        if (!ob?.accountName || typeof ob.amount !== "number" || !ob.date) continue;
         const accId = accountIds.get(normalizeAccountKey(ob.accountName));
         if (!accId) continue;
         await applyOpeningBalance(supabase, user.id, accId, ob.amount, ob.date);
         calibrated.push(ob.accountName);
       }
+      void newlyCreatedAccounts;
 
       const insertedCount = Array.isArray(data) ? data.length : 0;
       return NextResponse.json({
@@ -326,7 +335,15 @@ function stripVirtualFields(tx: RawTxInput): Record<string, unknown> {
 }
 
 function normalizeAccountKey(name: string): string {
-  return name.trim().toLowerCase();
+  // Reconhece a MESMA conta apesar de espaços/hífens/acentos diferentes, para
+  // que "Mozabanco" ≡ "Moza Banco", "Mpesa" ≡ "M-Pesa", "StandardBank" ≡
+  // "Standard Bank" e o import NUNCA crie contas duplicadas.
+  return name
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\s\-_.]/g, "");
 }
 
 function buildDedupKey(
@@ -355,7 +372,8 @@ function inferAccountType(name: string): AccountType {
 async function resolveAccountIds(
   supabase: SupabaseClient,
   userId: string,
-  txs: RawTxInput[]
+  txs: RawTxInput[],
+  createdOut?: Set<string>
 ): Promise<Map<string, string>> {
   const names = new Set<string>();
   for (const tx of txs) {
@@ -394,6 +412,10 @@ async function resolveAccountIds(
 
     for (const acc of (created || []) as { id: string; name: string }[]) {
       map.set(normalizeAccountKey(acc.name), acc.id);
+      // Regista as contas criadas AGORA — só estas podem ser calibradas
+      // automaticamente. Contas já existentes nunca são recalibradas num
+      // import (era o que estragava os saldos ao reimportar um extrato).
+      createdOut?.add(acc.id);
     }
   }
 
@@ -452,23 +474,108 @@ async function resolveCategoryIds(
   return map;
 }
 
+const ANCHOR_TAG = "__saldo_anchor__";
+
 /**
- * Calibrate an account so its running balance matches what the bank says it
- * was at `referenceDate`. Used after importing a bank statement that carries
- * the "OPENING BALANCE" / "Saldo de Abertura" header — the user doesn't have
- * to compute anything.
+ * Soma (com convenção de saldo: income +, expense/transfer −, e transferência
+ * recebida + no destino) TODAS as transações de uma conta com data <= `upTo`,
+ * EXCLUINDO a âncora "Saldo de Abertura". Pagina para não ser cortada às 1000
+ * linhas.
+ */
+async function sumAccountUpTo(
+  supabase: SupabaseClient,
+  userId: string,
+  accountId: string,
+  upTo: string
+): Promise<number> {
+  const PAGE = 1000;
+  let sum = 0;
+  for (let offset = 0; ; offset += PAGE) {
+    const { data, error } = await supabase
+      .schema("money_schema")
+      .from("transactions")
+      .select("account_id, transfer_to_account_id, type, amount, status, date, description")
+      .eq("user_id", userId)
+      .lte("date", upTo)
+      .order("id", { ascending: true })
+      .range(offset, offset + PAGE - 1);
+    if (error) throw new Error("Falha ao somar transações da conta: " + error.message);
+    const batch = (data || []) as Array<{
+      account_id: string | null;
+      transfer_to_account_id: string | null;
+      type: string;
+      amount: number;
+      status?: string | null;
+      description?: string | null;
+    }>;
+    for (const tx of batch) {
+      if (tx.status === "cancelled") continue;
+      const isCompleted = !tx.status || tx.status === "completed";
+      if (!isCompleted) continue;
+      if (tx.description === "Saldo de Abertura") continue; // exclui a âncora
+      const amt = Number(tx.amount) || 0;
+      if (tx.account_id === accountId) {
+        if (tx.type === "income") sum += amt;
+        else if (tx.type === "expense" || tx.type === "transfer") sum -= amt;
+      }
+      if (tx.transfer_to_account_id === accountId && tx.type === "transfer") {
+        sum += amt;
+      }
+    }
+    if (batch.length < PAGE) break;
+  }
+  return sum;
+}
+
+/**
+ * Ancora o saldo de uma conta no SALDO DE FECHO real do extrato.
  *
- * Replaces any existing "Saldo de Abertura" entry for the account and creates
- * a fresh one with category "Ajuste de Saldo" so it doesn't pollute the pies.
+ * Modelo: o extrato diz a verdade — o saldo na sua data de fecho. Guardamos uma
+ * única âncora "Saldo de Abertura" datada nessa data de fecho, com um valor tal
+ * que  saldo_total = saldo_de_fecho + (movimentos DEPOIS da data de fecho).
+ * Assim:
+ *   - depois de importar, o saldo é exactamente o do banco;
+ *   - reimportar (mesmo com sobreposição) recalcula para o mesmo número;
+ *   - importar histórico ANTIGO não mexe no saldo (a âncora fica na data mais
+ *     recente conhecida — forward-only);
+ *   - nunca colapsa nem inflaciona, porque nunca "recalcula a partir do zero".
+ *
+ * `targetBalance`/`targetDate` = saldo de fecho e data de fecho do extrato.
  */
 async function applyOpeningBalance(
   supabase: SupabaseClient,
   userId: string,
   accountId: string,
-  bankBalanceAtRefDate: number,
-  referenceDate: string
+  targetBalance: number,
+  targetDate: string
 ): Promise<void> {
-  // 1. Wipe any existing opening-balance marker
+  // 1. Lê a âncora existente para preservar uma data de fecho MAIS RECENTE
+  // (forward-only). O alvo fica guardado nas tags: [ANCHOR_TAG, bal, date].
+  const { data: existingAnchors } = await supabase
+    .schema("money_schema")
+    .from("transactions")
+    .select("id, date, tags")
+    .eq("user_id", userId)
+    .eq("account_id", accountId)
+    .eq("description", "Saldo de Abertura");
+
+  let anchorBal = targetBalance;
+  let anchorDate = targetDate;
+  for (const a of (existingAnchors || []) as Array<{ tags: string[] | null; date: string }>) {
+    const tags = a.tags || [];
+    const idx = tags.indexOf(ANCHOR_TAG);
+    if (idx >= 0 && tags[idx + 1] !== undefined && tags[idx + 2] !== undefined) {
+      const b = Number(tags[idx + 1]);
+      const d = tags[idx + 2]!;
+      // Só mantém a âncora antiga se for de uma data de fecho MAIS RECENTE.
+      if (Number.isFinite(b) && d > anchorDate) {
+        anchorBal = b;
+        anchorDate = d;
+      }
+    }
+  }
+
+  // 2. Apaga âncoras antigas.
   await supabase
     .schema("money_schema")
     .from("transactions")
@@ -477,40 +584,12 @@ async function applyOpeningBalance(
     .eq("account_id", accountId)
     .eq("description", "Saldo de Abertura");
 
-  // 2. Sum BUDGY's tracked movements for this account strictly BEFORE the
-  // reference date (the bank balance is "as of" that date — i.e. it already
-  // reflects everything earlier in the bank's view of things)
-  const { data: txs } = await supabase
-    .schema("money_schema")
-    .from("transactions")
-    .select("account_id, transfer_to_account_id, type, amount, status, date")
-    .eq("user_id", userId)
-    .lt("date", referenceDate);
+  // 3. Soma tudo até à data de fecho (já sem âncora) e calcula o ajuste que faz
+  // o total <= data de fecho ser exactamente o saldo de fecho.
+  const sumUpTo = await sumAccountUpTo(supabase, userId, accountId, anchorDate);
+  const diff = anchorBal - sumUpTo;
 
-  let budgySum = 0;
-  for (const tx of (txs || []) as {
-    account_id: string | null;
-    transfer_to_account_id: string | null;
-    type: string;
-    amount: number;
-    status?: string | null;
-  }[]) {
-    if (tx.status === "cancelled") continue;
-    const isCompleted = !tx.status || tx.status === "completed";
-    if (!isCompleted) continue;
-    const amt = Number(tx.amount) || 0;
-    if (tx.account_id === accountId) {
-      if (tx.type === "income") budgySum += amt;
-      else if (tx.type === "expense" || tx.type === "transfer") budgySum -= amt;
-    }
-    if (tx.transfer_to_account_id === accountId && tx.type === "transfer") {
-      budgySum += amt;
-    }
-  }
-
-  const diff = bankBalanceAtRefDate - budgySum;
   if (diff !== 0) {
-    // Resolve the "Ajuste de Saldo" category for this user (created on demand)
     const catType: "income" | "expense" = diff > 0 ? "income" : "expense";
     const { data: existingCats } = await supabase
       .schema("money_schema")
@@ -538,12 +617,6 @@ async function applyOpeningBalance(
       categoryId = (created as { id: string } | null)?.id;
     }
 
-    // Date the entry one day before the bank's reference date so it sits
-    // strictly before all the period's movements in BUDGY too
-    const d = new Date(referenceDate + "T00:00:00");
-    d.setDate(d.getDate() - 1);
-    const openingDate = d.toISOString().split("T")[0]!;
-
     await supabase
       .schema("money_schema")
       .from("transactions")
@@ -555,12 +628,13 @@ async function applyOpeningBalance(
         amount: Math.abs(diff),
         currency: "MZN",
         description: "Saldo de Abertura",
-        date: openingDate,
+        date: anchorDate,
         status: "completed",
+        tags: [ANCHOR_TAG, String(anchorBal), anchorDate],
       });
   }
 
-  // 3. Recompute the account's balance & balance_predicted
+  // 4. Recalcula o saldo da conta.
   await persistAccountBalances(supabase, userId, [accountId]);
 }
 

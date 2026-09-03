@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useAccounts } from "@/hooks/use-supabase-data";
+import type { Account, AccountType } from "@/lib/supabase/types";
 import {
   X,
   ArrowUpRight,
@@ -32,6 +35,7 @@ import {
   Users,
   Repeat,
   CreditCard,
+  Loader2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -78,12 +82,21 @@ const CATEGORIES: Record<TransactionType, CategoryItem[]> = {
   ],
 };
 
-const ACCOUNTS = [
-  { name: "M-Pesa", icon: Smartphone, color: "bg-red-500" },
-  { name: "Banco", icon: Landmark, color: "bg-blue-500" },
-  { name: "Dinheiro", icon: Banknote, color: "bg-amber-500" },
-  { name: "Poupança", icon: PiggyBank, color: "bg-emerald-500" },
-];
+/** Ícone sensato para cada tipo de conta real da utilizadora. */
+function accountIcon(type: AccountType): LucideIcon {
+  switch (type) {
+    case "mpesa":
+      return Smartphone;
+    case "bank":
+      return Landmark;
+    case "cash":
+      return Banknote;
+    case "savings":
+      return PiggyBank;
+    default:
+      return Wallet;
+  }
+}
 
 const RECURRING_OPTIONS: { key: RecurringFrequency; label: string }[] = [
   { key: "daily", label: "Diário" },
@@ -106,6 +119,9 @@ const SUGGESTED_TAGS = [
 ];
 
 export function AddTransactionModal({ onClose, onSaved }: AddTransactionModalProps) {
+  const { data: accounts, loading: accountsLoading } = useAccounts();
+  const realAccounts: Account[] = accounts ?? [];
+
   const [type, setType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<Currency>("MZN");
@@ -123,6 +139,13 @@ export function AddTransactionModal({ onClose, onSaved }: AddTransactionModalPro
   const [isClosing, setIsClosing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Selecciona por defeito a primeira conta REAL assim que carregarem.
+  useEffect(() => {
+    if (!selectedAccount && realAccounts.length > 0) {
+      setSelectedAccount(realAccounts[0]!.name);
+    }
+  }, [realAccounts, selectedAccount]);
 
   const currentCategories = CATEGORIES[type];
 
@@ -177,17 +200,17 @@ export function AddTransactionModal({ onClose, onSaved }: AddTransactionModalPro
 
       {/* Modal Sheet - Animated slide-up */}
       <div
-        className={`relative w-full max-w-lg bg-[var(--color-surface)] rounded-t-3xl max-h-[92vh] overflow-y-auto transition-transform duration-300 ease-out ${
+        className={`relative w-full max-w-lg bg-[var(--color-surface)] rounded-t-3xl max-h-[92vh] flex flex-col overflow-hidden transition-transform duration-300 ease-out ${
           isClosing ? "translate-y-full" : "translate-y-0 animate-in"
         }`}
       >
         {/* Handle */}
-        <div className="flex justify-center pt-3 pb-2 sticky top-0 bg-[var(--color-surface)] z-10 rounded-t-3xl">
+        <div className="flex justify-center pt-3 pb-2 bg-[var(--color-surface)] rounded-t-3xl flex-shrink-0">
           <div className="w-10 h-1 bg-gray-300 rounded-full" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-4 pb-4 sticky top-6 bg-[var(--color-surface)] z-10">
+        <div className="flex items-center justify-between px-4 pb-4 bg-[var(--color-surface)] flex-shrink-0">
           <h2 className="text-lg font-bold">Nova Transacção</h2>
           <button
             onClick={handleClose}
@@ -197,7 +220,8 @@ export function AddTransactionModal({ onClose, onSaved }: AddTransactionModalPro
           </button>
         </div>
 
-        <div className="px-4 pb-8 space-y-5">
+        {/* Corpo com scroll — não corta em ecrãs pequenos */}
+        <div className="flex-1 overflow-y-auto px-4 pb-8 space-y-5">
           {/* Type Selector */}
           <div>
             <label className="text-xs font-medium text-[var(--color-text-secondary)] mb-2 block">
@@ -259,52 +283,74 @@ export function AddTransactionModal({ onClose, onSaved }: AddTransactionModalPro
             )}
           </div>
 
-          {/* Account Selector */}
+          {/* Account Selector — contas REAIS da utilizadora */}
           <div>
             <label className="text-xs font-medium text-[var(--color-text-secondary)] mb-2 block">
               {type === "transfer" ? "Da conta" : "Conta"}
             </label>
-            <div className="flex gap-2 flex-wrap">
-              {ACCOUNTS.map((account) => (
-                <button
-                  key={account.name}
-                  onClick={() => setSelectedAccount(account.name)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
-                    selectedAccount === account.name
-                      ? "bg-primary-500 text-white"
-                      : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  <account.icon className="w-4 h-4" />
-                  {account.name}
-                </button>
-              ))}
-            </div>
+            {accountsLoading ? (
+              <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)] py-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                A carregar as tuas contas...
+              </div>
+            ) : realAccounts.length === 0 ? (
+              <Link
+                href="/contas"
+                onClick={handleClose}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200"
+              >
+                <Wallet className="w-4 h-4" />
+                Ainda não tens contas — cria uma primeiro
+              </Link>
+            ) : (
+              <div className="flex gap-2 flex-wrap">
+                {realAccounts.map((account) => {
+                  const Icon = accountIcon(account.type);
+                  return (
+                    <button
+                      key={account.id}
+                      onClick={() => setSelectedAccount(account.name)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                        selectedAccount === account.name
+                          ? "bg-primary-500 text-white"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {account.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* To Account (Transfer only) */}
-          {type === "transfer" && (
+          {type === "transfer" && realAccounts.length > 0 && (
             <div>
               <label className="text-xs font-medium text-[var(--color-text-secondary)] mb-2 block">
                 Para conta
               </label>
               <div className="flex gap-2 flex-wrap">
-                {ACCOUNTS.filter((a) => a.name !== selectedAccount).map(
-                  (account) => (
-                    <button
-                      key={account.name}
-                      onClick={() => setSelectedToAccount(account.name)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
-                        selectedToAccount === account.name
-                          ? "bg-indigo-500 text-white"
-                          : "bg-gray-100 text-gray-600"
-                      }`}
-                    >
-                      <account.icon className="w-4 h-4" />
-                      {account.name}
-                    </button>
-                  )
-                )}
+                {realAccounts
+                  .filter((a) => a.name !== selectedAccount)
+                  .map((account) => {
+                    const Icon = accountIcon(account.type);
+                    return (
+                      <button
+                        key={account.id}
+                        onClick={() => setSelectedToAccount(account.name)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                          selectedToAccount === account.name
+                            ? "bg-indigo-500 text-white"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        {account.name}
+                      </button>
+                    );
+                  })}
               </div>
             </div>
           )}
@@ -539,6 +585,16 @@ export function AddTransactionModal({ onClose, onSaved }: AddTransactionModalPro
                   is_recurring: isRecurring,
                   recurring_config: isRecurring ? { frequency: recurringFrequency } : null,
                   tags: tags.length > 0 ? tags : null,
+                  status: "completed",
+                  // Conta REAL seleccionada → resolvida para account_id existente
+                  // (não cria contas genéricas falsas).
+                  ...(selectedAccount ? { account: selectedAccount } : {}),
+                  ...(type === "transfer" && selectedToAccount
+                    ? { transfer_to_account: selectedToAccount }
+                    : {}),
+                  ...(selectedCategory && type !== "transfer"
+                    ? { category_name: selectedCategory }
+                    : {}),
                 };
 
                 const response = await fetch("/api/transactions", {

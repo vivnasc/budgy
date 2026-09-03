@@ -10,6 +10,8 @@ import {
   Wallet,
   Target,
   BarChart3,
+  Sparkles,
+  HandHeart,
   Upload,
   Users,
   Heart,
@@ -32,8 +34,10 @@ const PRINCIPAL_ITEMS: NavItem[] = [
 ];
 
 const GESTAO_ITEMS: NavItem[] = [
+  { label: "Parceiro", icon: HandHeart, href: "/parceiro" },
   { label: "Contas", icon: Wallet, href: "/contas" },
   { label: "Metas", icon: Target, href: "/metas" },
+  { label: "Análise", icon: Sparkles, href: "/analise" },
   { label: "Relatórios", icon: BarChart3, href: "/relatorios" },
 ];
 

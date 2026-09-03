@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { GoalCard } from "@/components/goal-card";
 import { QuickCreateModal } from "@/components/quick-create-modal";
+import { GoalManageModal } from "@/components/goal-manage-modal";
 import { useGoals } from "@/hooks/use-supabase-data";
 
 const GOAL_COLORS = ["bg-emerald-500", "bg-blue-500", "bg-amber-500", "bg-purple-500", "bg-rose-500", "bg-teal-500", "bg-indigo-500"];
@@ -17,6 +18,7 @@ const GOAL_COLORS = ["bg-emerald-500", "bg-blue-500", "bg-amber-500", "bg-purple
 export default function MetasPage() {
   const { data: goals, loading, refetch } = useGoals();
   const [creating, setCreating] = useState(false);
+  const [managingId, setManagingId] = useState<string | null>(null);
 
   const allGoals = goals ?? [];
   const activeGoals = allGoals.filter((g) => !g.is_completed);
@@ -40,7 +42,15 @@ export default function MetasPage() {
     <div className="min-h-screen pb-4">
       {/* Header */}
       <header className="bg-gradient-to-br from-primary-500 to-primary-700 text-white px-4 pt-12 pb-6 rounded-b-3xl">
-        <h1 className="text-xl font-bold mb-4">Metas Financeiras</h1>
+        <div className="flex items-center justify-between mb-4 gap-3">
+          <h1 className="text-xl font-bold">Metas Financeiras</h1>
+          <button
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-white/20 hover:bg-white/30 px-3 py-2 text-sm font-semibold text-white active:scale-95 transition-all flex-shrink-0"
+          >
+            <Plus className="w-4 h-4" /> Criar meta
+          </button>
+        </div>
 
         <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-4">
           <div className="flex items-center gap-3 mb-3">
@@ -81,7 +91,13 @@ export default function MetasPage() {
           <div className="card p-8 text-center">
             <Target className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-sm text-gray-500 mb-1">Sem metas ainda</p>
-            <p className="text-xs text-gray-400">Cria metas para acompanhar a tua poupança</p>
+            <p className="text-xs text-gray-400 mb-4">Cria metas para acompanhar a tua poupança</p>
+            <button
+              onClick={() => setCreating(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 active:scale-95 transition-all"
+            >
+              <Plus className="w-4 h-4" /> Criar primeira meta
+            </button>
           </div>
         ) : (
           <>
@@ -106,6 +122,7 @@ export default function MetasPage() {
                       target={goal.target_amount}
                       deadline={goal.deadline ?? ""}
                       color={goal.color ?? GOAL_COLORS[i % GOAL_COLORS.length]!}
+                      onClick={() => setManagingId(goal.id)}
                     />
                   ))}
                 </div>
@@ -135,6 +152,7 @@ export default function MetasPage() {
                       deadline={goal.deadline ?? ""}
                       color={goal.color ?? GOAL_COLORS[i % GOAL_COLORS.length]!}
                       completed
+                      onClick={() => setManagingId(goal.id)}
                     />
                   ))}
                 </div>
@@ -168,6 +186,18 @@ export default function MetasPage() {
       {creating && (
         <QuickCreateModal kind="goal" onClose={() => setCreating(false)} onCreated={() => refetch()} />
       )}
+
+      {managingId && (() => {
+        const goal = allGoals.find((g) => g.id === managingId);
+        if (!goal) return null;
+        return (
+          <GoalManageModal
+            goal={goal}
+            onClose={() => setManagingId(null)}
+            onSaved={() => refetch()}
+          />
+        );
+      })()}
     </div>
   );
 }

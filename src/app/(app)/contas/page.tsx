@@ -11,6 +11,8 @@ import {
   ArrowUpDown,
   Wallet,
   Pencil,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { AccountCard } from "@/components/account-card";
 import { OpeningBalanceModal } from "@/components/opening-balance-modal";
@@ -30,9 +32,32 @@ export default function ContasPage() {
   const { data: accounts, loading, refetch } = useAccounts();
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [creating, setCreating] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
 
   const allAccounts = accounts ?? [];
   const totalBalance = allAccounts.reduce((sum, acc) => sum + acc.balance, 0);
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    setDeleteErr(null);
+    try {
+      const res = await fetch(`/api/accounts/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setDeleteErr(data.error || "Erro ao apagar conta");
+        setDeletingId(null);
+        return;
+      }
+      setConfirmingDelete(null);
+      setDeletingId(null);
+      refetch();
+    } catch {
+      setDeleteErr("Erro de rede. Tenta novamente.");
+      setDeletingId(null);
+    }
+  };
   const totalPredicted = allAccounts.reduce((sum, acc) => sum + (acc.balance_predicted ?? acc.balance), 0);
   const savingsAccounts = allAccounts.filter((a) => a.type === "savings" || a.type === "investment");
   const savingsBalance = savingsAccounts.reduce((sum, acc) => sum + acc.balance, 0);
@@ -116,7 +141,13 @@ export default function ContasPage() {
             <div className="card p-8 text-center">
               <Wallet className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-sm text-gray-500 mb-1">Sem contas ainda</p>
-              <p className="text-xs text-gray-400">Adiciona M-Pesa, Banco ou Dinheiro para começar</p>
+              <p className="text-xs text-gray-400 mb-4">Adiciona M-Pesa, Banco ou Dinheiro para começar</p>
+              <button
+                onClick={() => setCreating(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary-500/20 active:scale-95 transition-all"
+              >
+                <Plus className="w-4 h-4" /> Adicionar conta
+              </button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -135,15 +166,57 @@ export default function ContasPage() {
                       lastTransaction=""
                       lastTransactionDate=""
                     />
-                    <button
-                      type="button"
-                      onClick={() => setEditingAccount(account)}
-                      className="absolute top-3 right-3 inline-flex items-center gap-1 text-[10px] font-semibold bg-white/90 hover:bg-white text-gray-700 px-2 py-1 rounded-lg shadow border border-gray-200"
-                      title="Acertar com o saldo real do banco"
-                    >
-                      <Pencil className="w-3 h-3" />
-                      Acertar saldo
-                    </button>
+                    <div className="absolute top-3 right-3 flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditingAccount(account)}
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold bg-white/90 hover:bg-white text-gray-700 px-2 py-1 rounded-lg shadow border border-gray-200"
+                        title="Acertar com o saldo real do banco"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        Acertar saldo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setConfirmingDelete(account.id); setDeleteErr(null); }}
+                        className="inline-flex items-center justify-center bg-white/90 hover:bg-red-50 text-red-500 p-1.5 rounded-lg shadow border border-gray-200"
+                        title="Apagar conta"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+
+                    {confirmingDelete === account.id && (
+                      <div className="mt-2 rounded-xl border border-red-100 bg-red-50 p-3">
+                        <p className="text-xs text-red-800 font-semibold">
+                          Apagar &quot;{account.name}&quot; e todas as transações dela?
+                        </p>
+                        <p className="text-[11px] text-red-600 mt-0.5">
+                          Não pode ser desfeito.
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            onClick={() => handleDelete(account.id)}
+                            disabled={deletingId === account.id}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold bg-red-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-50"
+                          >
+                            {deletingId === account.id ? (
+                              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> A apagar...</>
+                            ) : (
+                              "Sim, apagar"
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setConfirmingDelete(null)}
+                            disabled={deletingId === account.id}
+                            className="text-xs font-semibold bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                        {deleteErr && <p className="text-[11px] text-red-700 mt-2">{deleteErr}</p>}
+                      </div>
+                    )}
                   </div>
                 );
               })}

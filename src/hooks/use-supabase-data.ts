@@ -284,3 +284,27 @@ export function useLatestMonthOffset() {
 
   return offset;
 }
+
+// ─── Data da transação mais recente (ISO) ────────────────────────────────────
+// Âncora exacta (YYYY-MM-DD) para o cálculo por ciclo de salário. Devolve null
+// enquanto carrega ou se não houver dados.
+export function useLatestTransactionDate() {
+  const supabase = useSupabase();
+  const { user } = useUser();
+  const [date, setDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user || !supabase) {
+      setDate(null);
+      return;
+    }
+    let cancelled = false;
+    getLatestTransactionDate(supabase, user.id).then(({ data }) => {
+      if (cancelled) return;
+      setDate(data ?? null);
+    });
+    return () => { cancelled = true; };
+  }, [user, supabase]);
+
+  return date;
+}

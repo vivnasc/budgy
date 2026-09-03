@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   MessageSquareText,
   Upload,
@@ -17,8 +17,21 @@ import {
   CheckCircle2,
   XCircle,
   RefreshCw,
+  Download,
+  ShieldCheck,
+  RotateCcw,
+  ClipboardPaste,
 } from "lucide-react";
 import Link from "next/link";
+import { createBrowserClient } from "@/lib/auth/client";
+import { useUser } from "@/lib/auth/hooks";
+import {
+  gatherBackup,
+  downloadBackup,
+  parseBackup,
+  restoreBackup,
+  type BudgyBackup,
+} from "@/lib/backup";
 import type { ParsedSMS } from "@/lib/sms-parser";
 import type { ImportResult } from "@/lib/mobills-import";
 import { generateImportPDF } from "@/lib/import-pdf";
@@ -26,11 +39,28 @@ import { SUPPORTED_BANKS } from "@/lib/sms-parser";
 import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
 import { SUPPORTED_BANK_FORMATS, type BankFormat } from "@/lib/bank-statement-parser";
 import { applyLearnedRules, rememberDecision } from "@/lib/learned-rules";
+import {
+  applyMobillsMappingAndCutoff,
+  rebuildMobillsResult,
+  getMobillsAccountNames,
+  defaultTargetFor,
+  earliestDatesByAccount,
+  CREATE_NEW,
+} from "@/lib/mobills-safe";
+import { useAccounts, useTransactions } from "@/hooks/use-supabase-data";
+import { parsePastedTransactions } from "@/lib/paste-parser";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type Tab = "sms" | "import";
-type ImportStep = "upload" | "preview" | "mapping" | "confirm";
+type Tab = "sms" | "import" | "paste";
+type ImportStep = "upload" | "mobills" | "preview" | "mapping" | "confirm";
+
+/** Resumo do corte Mobills mostrado no topo da revisão. */
+interface MobillsCutSummary {
+  total: number;
+  kept: number;
+  dropped: number;
+}
 
 interface PendingTransaction {
   id: string;
@@ -47,6 +77,39 @@ interface PendingTransaction {
   status: "pending" | "approved" | "rejected" | "editing";
   /** Preenchido automaticamente a partir de uma decisão aprendida. */
   learned?: boolean;
+  /**
+   * Reconhecido como contrapartida de uma transferência JÁ guardada do outro
+   * lado (ex: a saída no CPC já guardada é a contrapartida desta entrada no
+   * Moza). É apenas reconhecimento — a linha continua a ser guardada.
+   */
+  counterpart?: boolean;
+  /** Nome da conta da transferência já guardada (o outro lado). */
+  counterpartAccount?: string | null;
+  /**
+   * Já existe na base de dados (mesma conta + data + valor + descrição). É
+   * saltada automaticamente para não duplicar quando reimportas um extrato que
+   * se sobrepõe a dias já lançados.
+   */
+  duplicate?: boolean;
+}
+
+/**
+ * Assinatura de uma transação para deteção de duplicados entre uma importação
+ * e o que já está guardado. Junta conta + data + valor (em cêntimos) +
+ * descrição normalizada. Reimportar o MESMO extrato produz descrições
+ * idênticas, por isso a correspondência é exacta e não apanha transações
+ * diferentes por acaso.
+ */
+function dedupSignature(
+  accountName: string | null | undefined,
+  date: string,
+  amount: number,
+  description: string
+): string {
+  const acc = (accountName ?? "").trim().toLowerCase();
+  const cents = Math.round((Number(amount) || 0) * 100);
+  const desc = (description ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return `${acc}|${date}|${cents}|${desc}`;
 }
 
 // ─── Confirmação / categorias ────────────────────────────────────────────────
@@ -81,12 +144,77 @@ function defaultCategoryForType(
  * (empréstimo, dinheiro de alguém), não categorizados, ou valores grandes.
  */
 function needsConfirmation(tx: PendingTransaction): boolean {
+  // Uma contrapartida reconhecida já está resolvida — não é algo a confirmar.
+  if (tx.counterpart === true) return false;
+  // Algo que a utilizadora já ensinou (texto+valor) não precisa de reconfirmação.
+  if (tx.learned === true) return false;
   return (
     tx.type === "transfer" ||
     (tx.type === "income" && tx.category !== "Salário") ||
     tx.category === "Outros" ||
     Math.abs(tx.amount) >= 100000
   );
+}
+
+/**
+ * Depois de a lista de movimentos estar construída, pergunta ao servidor se
+ * alguma transferência é contrapartida de uma transferência JÁ guardada do
+ * outro lado. Marca as reconhecidas com `counterpart` para não pedir
+ * reclassificação nem parecer dinheiro novo.
+ *
+ * Corre uma vez por lista construída (chaveado no conjunto de ids). Falha em
+ * silêncio — é uma camada extra "nice-to-have".
+ */
+function useCounterpartMatching(
+  transactions: PendingTransaction[],
+  setTransactions: React.Dispatch<React.SetStateAction<PendingTransaction[]>>
+) {
+  const doneKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const ids = transactions.map((t) => t.id).join(",");
+    if (!ids || doneKeyRef.current === ids) return;
+
+    const candidates = transactions
+      .filter((t) => t.type === "transfer")
+      .map((t) => ({ tempId: t.id, date: t.date, amount: t.amount, type: t.type }));
+
+    // Marca já para não repetir (mesmo quando não há transferências).
+    doneKeyRef.current = ids;
+    if (candidates.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/transactions/match-transfers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ candidates }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const matched = (data?.matched ?? []) as Array<{
+          tempId: string;
+          account: string | null;
+          date: string;
+        }>;
+        if (cancelled || matched.length === 0) return;
+        const byId = new Map(matched.map((m) => [m.tempId, m]));
+        setTransactions((prev) =>
+          prev.map((tx) => {
+            const m = byId.get(tx.id);
+            return m ? { ...tx, counterpart: true, counterpartAccount: m.account } : tx;
+          })
+        );
+      } catch {
+        // Silencioso — o reconhecimento de contrapartida é opcional.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [transactions, setTransactions]);
 }
 
 // ─── Page Component ──────────────────────────────────────────────────────────
@@ -115,33 +243,228 @@ export default function ImportarPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setActiveTab("sms")}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-semibold transition-all ${
               activeTab === "sms"
                 ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
                 : "bg-gray-100 text-gray-600"
             }`}
           >
-            <MessageSquareText className="w-4 h-4" />
-            SMS Bancário
+            <MessageSquareText className="w-4 h-4 flex-shrink-0" />
+            SMS
           </button>
           <button
             onClick={() => setActiveTab("import")}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-semibold transition-all ${
               activeTab === "import"
                 ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
                 : "bg-gray-100 text-gray-600"
             }`}
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            Importar Ficheiro
+            <FileSpreadsheet className="w-4 h-4 flex-shrink-0" />
+            Ficheiro
+          </button>
+          <button
+            onClick={() => setActiveTab("paste")}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-semibold transition-all ${
+              activeTab === "paste"
+                ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/25"
+                : "bg-gray-100 text-gray-600"
+            }`}
+          >
+            <ClipboardPaste className="w-4 h-4 flex-shrink-0" />
+            Colar
           </button>
         </div>
       </header>
 
       {/* Content */}
       <div className="px-4 py-6">
-        {activeTab === "sms" ? <SMSTab /> : <ImportTab />}
+        {activeTab === "sms" ? <SMSTab /> : activeTab === "paste" ? <PasteTab /> : <ImportTab />}
+        <BackupRestoreSection />
         <ResetDataSection />
+      </div>
+    </div>
+  );
+}
+
+// ─── Backup / Restauro Section ───────────────────────────────────────────────
+
+function BackupRestoreSection() {
+  const { user } = useUser();
+
+  // Export
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState<{ transactions: number; accounts: number } | null>(null);
+  const [exportErr, setExportErr] = useState<string | null>(null);
+
+  // Restore
+  const restoreInputRef = useRef<HTMLInputElement>(null);
+  const [pendingBackup, setPendingBackup] = useState<BudgyBackup | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreResult, setRestoreResult] = useState<{ restored: number; duplicates: number } | null>(null);
+  const [restoreErr, setRestoreErr] = useState<string | null>(null);
+
+  const handleDownload = async () => {
+    setExporting(true);
+    setExportErr(null);
+    setExported(null);
+    try {
+      const supabase = createBrowserClient();
+      if (!user) {
+        setExportErr("Precisas de ter sessão iniciada.");
+        return;
+      }
+      const backup = await gatherBackup(supabase, user.id);
+      downloadBackup(backup);
+      setExported({ transactions: backup.transactions.length, accounts: backup.accounts.length });
+    } catch (e) {
+      setExportErr(e instanceof Error ? e.message : "Erro ao gerar o backup.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleFilePicked = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (restoreInputRef.current) restoreInputRef.current.value = "";
+    if (!file) return;
+
+    setRestoreErr(null);
+    setRestoreResult(null);
+    setPendingBackup(null);
+    try {
+      const text = await file.text();
+      const backup = parseBackup(text);
+      setPendingBackup(backup);
+    } catch (e) {
+      setRestoreErr(e instanceof Error ? e.message : "Ficheiro inválido.");
+    }
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!pendingBackup) return;
+    setRestoring(true);
+    setRestoreErr(null);
+    try {
+      const result = await restoreBackup(pendingBackup);
+      setRestoreResult(result);
+      setPendingBackup(null);
+      // Recarrega para o painel reflectir os dados restaurados.
+      setTimeout(() => window.location.reload(), 1800);
+    } catch (e) {
+      setRestoreErr(e instanceof Error ? e.message : "Erro de rede ao restaurar.");
+    } finally {
+      setRestoring(false);
+    }
+  };
+
+  return (
+    <div className="mt-10 pt-6 border-t border-gray-100 space-y-4">
+      <div className="bg-emerald-50 rounded-2xl border border-emerald-100 p-4">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-emerald-900">Cópia de segurança</h3>
+            <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+              Antes de importares histórico, descarrega uma cópia de tudo. Se algo correr mal,
+              restauras em segundos. Guarda este ficheiro num sítio seguro.
+            </p>
+
+            {/* Descarregar backup */}
+            <div className="mt-4">
+              {exported ? (
+                <p className="text-xs text-emerald-800 font-semibold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  Backup descarregado — {exported.transactions} transações, {exported.accounts} contas.
+                </p>
+              ) : (
+                <button
+                  onClick={handleDownload}
+                  disabled={exporting}
+                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                >
+                  {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  {exporting ? "A preparar backup..." : "Descarregar backup"}
+                </button>
+              )}
+              {exported && (
+                <button
+                  onClick={handleDownload}
+                  disabled={exporting}
+                  className="mt-3 block text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline disabled:opacity-50"
+                >
+                  Descarregar outra vez
+                </button>
+              )}
+              {exportErr && <p className="text-xs text-red-700 mt-2">{exportErr}</p>}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Restaurar de um backup */}
+      <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4">
+        <div className="flex items-start gap-3">
+          <RotateCcw className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-blue-900">Restaurar de um backup</h3>
+            <p className="text-xs text-blue-700 mt-1 leading-relaxed">
+              Carrega um ficheiro <span className="font-mono">.json</span> do BUDGY. O restauro
+              <strong> ACRESCENTA o que falta, não apaga nada</strong> — graças à deteção de duplicados.
+            </p>
+
+            <input
+              ref={restoreInputRef}
+              type="file"
+              accept=".json,application/json"
+              onChange={handleFilePicked}
+              className="hidden"
+            />
+
+            {restoreResult ? (
+              <p className="text-xs text-emerald-800 font-semibold mt-4 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                {restoreResult.restored} restauradas, {restoreResult.duplicates} já existiam. A recarregar...
+              </p>
+            ) : pendingBackup ? (
+              <div className="mt-4 rounded-xl bg-white border border-blue-100 p-3">
+                <p className="text-xs text-blue-900 font-semibold">
+                  {pendingBackup.transactions.length} transações, {pendingBackup.accounts.length} contas
+                  {pendingBackup.exported_at
+                    ? ` (backup de ${pendingBackup.exported_at.split("T")[0]})`
+                    : ""}
+                  {" "}— restaurar?
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleConfirmRestore}
+                    disabled={restoring}
+                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-50"
+                  >
+                    {restoring ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                    {restoring ? "A restaurar..." : "Sim, restaurar"}
+                  </button>
+                  <button
+                    onClick={() => setPendingBackup(null)}
+                    disabled={restoring}
+                    className="text-xs font-semibold bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-lg disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => restoreInputRef.current?.click()}
+                className="mt-4 inline-flex items-center gap-2 bg-white text-blue-700 border border-blue-200 hover:bg-blue-100 px-4 py-2.5 rounded-xl text-sm font-semibold"
+              >
+                <Upload className="w-4 h-4" />
+                Escolher ficheiro de backup
+              </button>
+            )}
+            {restoreErr && <p className="text-xs text-red-700 mt-2">{restoreErr}</p>}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -321,6 +644,260 @@ function ResetDataSection() {
   );
 }
 
+// ─── Colar Transacções Tab ───────────────────────────────────────────────────
+
+function PasteTab() {
+  const { data: accounts, loading: accountsLoading } = useAccounts();
+  const realAccounts = accounts ?? [];
+
+  const [pasteText, setPasteText] = useState("");
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Reconhece contrapartidas de transferências já guardadas do outro lado.
+  useCounterpartMatching(pendingTransactions, setPendingTransactions);
+
+  // Selecciona por defeito a primeira conta real assim que carregarem.
+  useEffect(() => {
+    if (!selectedAccount && realAccounts.length > 0) {
+      setSelectedAccount(realAccounts[0]!.name);
+    }
+  }, [realAccounts, selectedAccount]);
+
+  const handleParse = useCallback(() => {
+    setError(null);
+    const parsed = parsePastedTransactions(pasteText);
+    if (parsed.length === 0) {
+      setError(
+        "Não consegui ler transações. Confirma que colaste o texto do banco com data, descrição e valor (ex: 21 AUG 2026 ... -3,220.38 MZN)."
+      );
+      return;
+    }
+    const built: PendingTransaction[] = parsed.map((tx, i) => ({
+      id: `paste-${Date.now()}-${i}`,
+      source: "Colado",
+      type: tx.type,
+      amount: tx.amount,
+      currency: "MZN",
+      date: tx.date,
+      description: tx.description,
+      category: tx.category || "Outros",
+      suggestedCategory: tx.category,
+      ...(selectedAccount ? { accountHint: selectedAccount } : {}),
+      confidence: 0.7,
+      status: "pending" as const,
+    }));
+    // Aplica decisões aprendidas antes de mostrar (a app lembra-se).
+    const learned = applyLearnedRules(built);
+    setPendingTransactions((prev) => [...learned, ...prev]);
+    setPasteText("");
+  }, [pasteText, selectedAccount]);
+
+  const handleApprove = (id: string) => {
+    setPendingTransactions((prev) =>
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category: tx.category });
+        return { ...tx, status: "approved" as const };
+      })
+    );
+  };
+
+  const handleReject = (id: string) => {
+    setPendingTransactions((prev) =>
+      prev.map((tx) => (tx.id === id ? { ...tx, status: "rejected" as const } : tx))
+    );
+  };
+
+  const handleCategoryChange = (id: string, category: string) => {
+    setPendingTransactions((prev) =>
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category });
+        return { ...tx, category, status: "pending" as const };
+      })
+    );
+  };
+
+  const handleTypeChange = (id: string, type: PendingTransaction["type"]) => {
+    setPendingTransactions((prev) =>
+      prev.map((tx) => {
+        if (tx.id !== id) return tx;
+        const category = defaultCategoryForType(type, tx.category);
+        rememberDecision(tx.description, tx.amount, { type, category });
+        return { ...tx, type, category, status: "pending" as const };
+      })
+    );
+  };
+
+  const approvedCount = pendingTransactions.filter((tx) => tx.status === "approved").length;
+  const pendingCount = pendingTransactions.filter((tx) => tx.status === "pending").length;
+
+  const handleSaveApproved = async () => {
+    const approved = pendingTransactions.filter((tx) => tx.status === "approved");
+    if (approved.length === 0) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      const transactions = approved.map((tx) => ({
+        type: tx.type,
+        amount: tx.amount,
+        currency: tx.currency,
+        date: tx.date,
+        description: tx.description,
+        category_name: tx.category,
+        ...(tx.accountHint ? { account: tx.accountHint } : {}),
+        status: "completed",
+      }));
+
+      const response = await fetch("/api/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactions }),
+      });
+
+      if (response.ok) {
+        setPendingTransactions((prev) => prev.filter((tx) => tx.status !== "approved"));
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || "Erro ao guardar transações");
+      }
+    } catch {
+      setError("Erro ao guardar transações");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Como funciona */}
+      <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
+        <div className="flex items-start gap-3">
+          <Sparkles className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="text-sm font-bold text-emerald-900">Colar transacções</h3>
+            <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+              Quando não consegues exportar CSV, copia o bloco de movimentos do teu
+              internet-banking e cola aqui. O BUDGY lê datas, descrições e valores. Escolhe a
+              conta, carrega em <strong>Ler</strong> e valida.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Escolha da conta */}
+      <div>
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+          A que conta pertence
+        </h3>
+        {accountsLoading ? (
+          <div className="flex items-center gap-2 text-xs text-gray-500 py-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            A carregar as tuas contas...
+          </div>
+        ) : realAccounts.length === 0 ? (
+          <Link
+            href="/contas"
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200"
+          >
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            Ainda não tens contas — cria uma primeiro
+          </Link>
+        ) : (
+          <div className="flex gap-2 flex-wrap">
+            {realAccounts.map((account) => (
+              <button
+                key={account.id}
+                onClick={() => setSelectedAccount(account.name)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                  selectedAccount === account.name
+                    ? "bg-emerald-500 text-white"
+                    : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {account.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Área de texto */}
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-50 flex items-center gap-2">
+          <ClipboardPaste className="w-4 h-4 text-gray-400" />
+          <span className="text-sm font-semibold text-gray-700">Colar texto do banco</span>
+        </div>
+        <textarea
+          value={pasteText}
+          onChange={(e) => setPasteText(e.target.value)}
+          placeholder={`Cola aqui os movimentos copiados do internet-banking...\n\nExemplo:\n21 AUG 2026   FT2623333454   Pagamento no PV (VISA)\nPAYPAL *PADDLE.NET   -3,220.38   MZN`}
+          className="w-full px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 resize-none focus:outline-none"
+          rows={8}
+        />
+        <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between">
+          <span className="text-xs text-gray-400">
+            {pasteText.length > 0 ? `${pasteText.length} caracteres` : "Uma transação por bloco"}
+          </span>
+          <button
+            onClick={handleParse}
+            disabled={!pasteText.trim()}
+            className="flex items-center gap-2 bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:bg-emerald-600"
+          >
+            <Sparkles className="w-4 h-4" />
+            Ler
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-3 bg-red-50 rounded-2xl p-4 border border-red-100">
+          <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* Transações para validar */}
+      {pendingTransactions.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-gray-900">
+              Transações para validar
+              {pendingCount > 0 && (
+                <span className="ml-2 text-xs font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                  {pendingCount} pendente{pendingCount !== 1 ? "s" : ""}
+                </span>
+              )}
+            </h3>
+            {approvedCount > 0 && (
+              <button
+                onClick={handleSaveApproved}
+                disabled={saving}
+                className="flex items-center gap-1.5 bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-xl disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Guardar {approvedCount}
+              </button>
+            )}
+          </div>
+
+          <PendingReviewList
+            transactions={pendingTransactions}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onCategoryChange={handleCategoryChange}
+            onTypeChange={handleTypeChange}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── SMS Tab ─────────────────────────────────────────────────────────────────
 
 function SMSTab() {
@@ -328,6 +905,9 @@ function SMSTab() {
   const [parsing, setParsing] = useState(false);
   const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Reconhece contrapartidas de transferências já guardadas do outro lado.
+  useCounterpartMatching(pendingTransactions, setPendingTransactions);
 
   const handleParseSMS = useCallback(async () => {
     if (!smsText.trim()) return;
@@ -405,7 +985,7 @@ function SMSTab() {
       prev.map((tx) => {
         if (tx.id !== id) return tx;
         // Aprovar com os valores mostrados ensina a app
-        rememberDecision(tx.description, { type: tx.type, category: tx.category });
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category: tx.category });
         return { ...tx, status: "approved" as const };
       })
     );
@@ -421,7 +1001,7 @@ function SMSTab() {
     setPendingTransactions((prev) =>
       prev.map((tx) => {
         if (tx.id !== id) return tx;
-        rememberDecision(tx.description, { type: tx.type, category });
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category });
         return { ...tx, category, status: "pending" as const };
       })
     );
@@ -432,7 +1012,7 @@ function SMSTab() {
       prev.map((tx) => {
         if (tx.id !== id) return tx;
         const category = defaultCategoryForType(type, tx.category);
-        rememberDecision(tx.description, { type, category });
+        rememberDecision(tx.description, tx.amount, { type, category });
         return { ...tx, type, category, status: "pending" as const };
       })
     );
@@ -601,10 +1181,20 @@ function PendingReviewList({
 }) {
   const [onlyToConfirm, setOnlyToConfirm] = useState(false);
 
-  const toConfirm = transactions.filter(
+  // Duplicados detectados (já existentes) são saltados — não entram na lista.
+  const fresh = transactions.filter((tx) => !tx.duplicate);
+  const toConfirm = fresh.filter(
     (tx) => needsConfirmation(tx) && tx.status === "pending"
   );
-  const visible = onlyToConfirm ? toConfirm : transactions;
+  const visible = onlyToConfirm ? toConfirm : fresh;
+
+  // Com centenas/milhares de linhas, desenhar tudo trava o scroll. Mostramos só
+  // um bloco de cada vez (a importação guarda TODAS na mesma — o corte é só
+  // visual). "Mostrar mais" revela o bloco seguinte.
+  const CHUNK = 200;
+  const [shown, setShown] = useState(CHUNK);
+  const rendered = visible.slice(0, shown);
+  const remaining = visible.length - rendered.length;
 
   return (
     <div className="space-y-3">
@@ -634,7 +1224,7 @@ function PendingReviewList({
         </div>
       )}
 
-      {visible.map((tx) => (
+      {rendered.map((tx) => (
         <PendingTransactionCard
           key={tx.id}
           transaction={tx}
@@ -644,6 +1234,20 @@ function PendingReviewList({
           onTypeChange={(type) => onTypeChange(tx.id, type)}
         />
       ))}
+
+      {remaining > 0 && (
+        <button
+          onClick={() => setShown((n) => n + CHUNK)}
+          className="w-full text-sm font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-2xl py-3 hover:bg-emerald-100 transition-colors"
+        >
+          Mostrar mais {Math.min(CHUNK, remaining)} (faltam {remaining})
+        </button>
+      )}
+      {visible.length > CHUNK && (
+        <p className="text-center text-[11px] text-gray-400">
+          As {visible.length} são todas importadas ao carregar em Importar — mesmo as não visíveis.
+        </p>
+      )}
     </div>
   );
 }
@@ -727,6 +1331,16 @@ function PendingTransactionCard({
           </p>
         </div>
       </div>
+
+      {/* Contrapartida reconhecida — transferência já registada do outro lado */}
+      {tx.counterpart && (
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
+          <span className="text-sm font-semibold text-blue-700">
+            🔗 Contrapartida — já registada
+            {tx.counterpartAccount ? ` (${tx.counterpartAccount})` : ""}
+          </span>
+        </div>
+      )}
 
       {/* Type toggle */}
       {tx.status !== "rejected" && (
@@ -831,7 +1445,24 @@ function ImportTab() {
   const [detectedFormat, setDetectedFormat] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  // Resultado original do Mobills (antes do mapeamento/corte) e resumo do corte.
+  const [mobillsRaw, setMobillsRaw] = useState<ImportResult | null>(null);
+  const [mobillsSummary, setMobillsSummary] = useState<MobillsCutSummary | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Depois do parse: Mobills vai primeiro ao passo de preparação (mapeamento +
+  // corte); os restantes formatos vão directamente à revisão.
+  const routeAfterParse = useCallback((result: ImportResult, fmt: string) => {
+    if (fmt === "mobills") {
+      setMobillsRaw(result);
+      setImportResult(null);
+      setMobillsSummary(null);
+      setStep("mobills");
+    } else {
+      setImportResult(result);
+      setStep("preview");
+    }
+  }, []);
 
   const processFile = useCallback(async (file: File) => {
     setImporting(true);
@@ -840,8 +1471,23 @@ function ImportTab() {
     try {
       const filename = file.name.toLowerCase();
       const isExcel = filename.endsWith(".xlsx") || filename.endsWith(".xls");
+      const isPdf = filename.endsWith(".pdf");
 
-      if (isExcel) {
+      if (isPdf) {
+        // Extração do texto do PDF acontece no browser (pdfjs). O extrato
+        // M-Pesa não tem CSV — reconstruímos as linhas pelas coordenadas.
+        const { parseMpesaPdfFile } = await import("@/lib/mpesa-pdf-client");
+        const data = await parseMpesaPdfFile(file);
+        if (data.success) {
+          setDetectedFormat("mpesa");
+          routeAfterParse(data, "mpesa");
+        } else {
+          setError(
+            data.errors[0] ||
+              "PDF não reconhecido — de momento só extratos M-Pesa em PDF"
+          );
+        }
+      } else if (isExcel) {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("format", "auto");
@@ -853,9 +1499,9 @@ function ImportTab() {
 
         const data = await response.json();
         if (data.success) {
-          setImportResult(data);
-          setDetectedFormat(data.detectedFormat || "auto");
-          setStep("preview");
+          const fmt = data.detectedFormat || "auto";
+          setDetectedFormat(fmt);
+          routeAfterParse(data, fmt);
         } else {
           setError(data.error || "Erro ao processar ficheiro");
         }
@@ -870,9 +1516,9 @@ function ImportTab() {
 
         const data = await response.json();
         if (data.success) {
-          setImportResult(data);
-          setDetectedFormat(data.detectedFormat || "auto");
-          setStep("preview");
+          const fmt = data.detectedFormat || "auto";
+          setDetectedFormat(fmt);
+          routeAfterParse(data, fmt);
         } else {
           setError(data.error || "Erro ao processar ficheiro");
         }
@@ -883,7 +1529,7 @@ function ImportTab() {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
-  }, []);
+  }, [routeAfterParse]);
 
   const handleFileInput = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -916,7 +1562,7 @@ function ImportTab() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.xlsx,.xls,.txt"
+              accept=".csv,.xlsx,.xls,.txt,.pdf"
               onChange={handleFileInput}
               className="hidden"
             />
@@ -934,7 +1580,7 @@ function ImportTab() {
                   Arrasta aqui o ficheiro do banco
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
-                  CSV ou Excel — CPC, Moza Banco, Standard Bank, Mobills
+                  CSV, Excel ou PDF (M-Pesa) — CPC, Moza Banco, Standard Bank, Mobills
                 </p>
                 <p className="text-xs text-gray-300 mt-0.5">
                   ou clica para escolher
@@ -956,12 +1602,218 @@ function ImportTab() {
           )}
         </>
       )}
+      {step === "mobills" && mobillsRaw && (
+        <MobillsPrepareStep
+          result={mobillsRaw}
+          onBack={() => { setStep("upload"); setMobillsRaw(null); setDetectedFormat(null); }}
+          onContinue={(filtered, summary) => {
+            setImportResult(filtered);
+            setMobillsSummary(summary);
+            setStep("preview");
+          }}
+        />
+      )}
       {step === "preview" && importResult && (
         <ImportPreview
           result={importResult}
           detectedFormat={detectedFormat}
-          onBack={() => { setStep("upload"); setImportResult(null); setDetectedFormat(null); }}
+          mobillsSummary={mobillsSummary}
+          onBack={() => {
+            // Volta ao passo de preparação Mobills se veio de lá; senão, ao upload.
+            if (mobillsRaw) {
+              setStep("mobills");
+              setImportResult(null);
+              setMobillsSummary(null);
+            } else {
+              setStep("upload");
+              setImportResult(null);
+              setDetectedFormat(null);
+            }
+          }}
         />
+      )}
+    </div>
+  );
+}
+
+// ─── Passo de Preparação Mobills (mapeamento de contas + corte por conta) ────
+
+function MobillsPrepareStep({
+  result,
+  onBack,
+  onContinue,
+}: {
+  result: ImportResult;
+  onBack: () => void;
+  onContinue: (filtered: ImportResult, summary: MobillsCutSummary) => void;
+}) {
+  const { data: accounts, loading: accountsLoading } = useAccounts();
+  // Janela larga para apanhar a data mais antiga de cada conta.
+  const { data: existingTx, loading: txLoading } = useTransactions({
+    from: "2000-01-01",
+    limit: 100000,
+  });
+
+  const loading = accountsLoading || txLoading;
+
+  const mobillsAccounts = useMemo(() => getMobillsAccountNames(result), [result]);
+  const appAccountNames = useMemo(
+    () => (accounts ?? []).map((a) => a.name),
+    [accounts]
+  );
+
+  // Data mais antiga já existente por nome de conta (o corte).
+  const earliestByAccount = useMemo(
+    () =>
+      earliestDatesByAccount(
+        (existingTx ?? []).map((t) => ({ date: t.date, accountName: t.accounts?.name ?? null }))
+      ),
+    [existingTx]
+  );
+
+  // Mapeamento: nome Mobills → nome de conta app OU CREATE_NEW.
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+
+  // Preenche defaults quando as contas carregam (ou os nomes Mobills mudam).
+  useEffect(() => {
+    if (loading) return;
+    setMapping((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const name of mobillsAccounts) {
+        if (next[name] === undefined) {
+          next[name] = defaultTargetFor(name, appAccountNames);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [loading, mobillsAccounts, appAccountNames]);
+
+  const handleContinue = () => {
+    // Mapeamento final: CREATE_NEW → o próprio nome Mobills (conta nova).
+    const finalMapping: Record<string, string> = {};
+    for (const name of mobillsAccounts) {
+      const target = mapping[name] ?? defaultTargetFor(name, appAccountNames);
+      finalMapping[name] = target === CREATE_NEW ? name : target;
+    }
+
+    // Cortes: só para contas destino que JÁ têm dados existentes.
+    const cutoffs: Record<string, string> = {};
+    for (const name of mobillsAccounts) {
+      const target = finalMapping[name]!;
+      const cutoff = earliestByAccount[target];
+      if (cutoff) cutoffs[target] = cutoff;
+    }
+
+    const { kept, droppedCount, total } = applyMobillsMappingAndCutoff(
+      result.imported,
+      finalMapping,
+      cutoffs
+    );
+    const filtered = rebuildMobillsResult(result, kept, finalMapping);
+    onContinue(filtered, { total, kept: kept.length, dropped: droppedCount });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="text-sm font-bold text-emerald-900">Preparar importação Mobills</h3>
+            <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+              Para não duplicar o que já importaste dos extratos, o Mobills só entra em datas
+              <strong> ANTERIORES</strong> ao que já tens em cada conta. Confirma o mapeamento
+              das contas em baixo.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-gray-500">
+          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+          <span className="text-sm">A ler as tuas contas e datas...</span>
+        </div>
+      ) : (
+        <>
+          {/* (a) Mapeamento de contas */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-5">
+            <h3 className="text-sm font-bold text-gray-900 mb-1">Mapeamento de contas</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Liga cada conta do Mobills a uma conta da app (ou cria uma nova).
+            </p>
+            <div className="space-y-3">
+              {mobillsAccounts.map((name) => {
+                const selected = mapping[name] ?? defaultTargetFor(name, appAccountNames);
+                const targetName = selected === CREATE_NEW ? name : selected;
+                const cutoff = selected === CREATE_NEW ? undefined : earliestByAccount[targetName];
+                return (
+                  <div key={name} className="rounded-xl border border-gray-100 p-3">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-800">{name}</span>
+                      <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                      <select
+                        value={selected}
+                        onChange={(e) =>
+                          setMapping((prev) => ({ ...prev, [name]: e.target.value }))
+                        }
+                        className="flex-1 min-w-[140px] text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      >
+                        {appAccountNames.map((appName) => (
+                          <option key={appName} value={appName}>
+                            {appName}
+                          </option>
+                        ))}
+                        <option value={CREATE_NEW}>Criar nova conta &quot;{name}&quot;</option>
+                      </select>
+                    </div>
+                    {/* (b) Corte por conta */}
+                    <p className="text-[11px] mt-2 ml-0.5">
+                      {cutoff ? (
+                        <span className="text-amber-700">
+                          Corte: só entram transações <strong>antes de {cutoff}</strong> (o que já
+                          tens fica intacto).
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700">Sem dados — importa tudo.</span>
+                      )}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Explicação do corte */}
+          <div className="bg-amber-50 rounded-2xl border border-amber-100 p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-amber-800 leading-relaxed">
+                Para não duplicar o que já importaste dos extratos, o Mobills só entra em datas
+                ANTERIORES ao que já tens em cada conta. Contas novas (sem dados) importam tudo.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="flex items-center justify-center gap-2 bg-white text-gray-700 border border-gray-200 font-semibold py-3 px-5 rounded-2xl hover:bg-gray-50"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Voltar
+            </button>
+            <button
+              onClick={handleContinue}
+              className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 text-white font-semibold py-3 rounded-2xl hover:bg-emerald-600 shadow-lg shadow-emerald-500/20"
+            >
+              Continuar
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
@@ -972,10 +1824,12 @@ function ImportTab() {
 function ImportPreview({
   result,
   detectedFormat,
+  mobillsSummary,
   onBack,
 }: {
   result: ImportResult;
   detectedFormat?: string | null;
+  mobillsSummary?: MobillsCutSummary | null;
   onBack: () => void;
 }) {
   const [saving, setSaving] = useState(false);
@@ -1002,11 +1856,61 @@ function ImportPreview({
     )
   );
 
+  // Reconhece contrapartidas de transferências já guardadas do outro lado.
+  useCounterpartMatching(pending, setPending);
+
+  // Deteção automática de duplicados contra o que já está guardado. Quando
+  // reimportas um extrato que se sobrepõe a dias já lançados, as transações que
+  // já existem (mesma conta + data + valor + descrição) são saltadas sozinhas —
+  // vês só as novas, sem teres de rejeitar à mão.
+  const { data: existingTx, loading: existingLoading } = useTransactions({
+    from: "2000-01-01",
+    limit: 100000,
+  });
+  const [dedupDone, setDedupDone] = useState(false);
+  const [dedupCount, setDedupCount] = useState(0);
+
+  useEffect(() => {
+    if (dedupDone || existingLoading || !existingTx) return;
+    // Multiset das assinaturas já guardadas (conta com repetições exactas).
+    const counts = new Map<string, number>();
+    for (const t of existingTx) {
+      const sig = dedupSignature(
+        t.accounts?.name ?? null,
+        t.date,
+        Number(t.amount) || 0,
+        t.description ?? ""
+      );
+      counts.set(sig, (counts.get(sig) ?? 0) + 1);
+    }
+    // Percorre os importados por ordem, consumindo uma ocorrência por match.
+    let found = 0;
+    const marks = pending.map((tx) => {
+      const sig = dedupSignature(tx.accountHint ?? null, tx.date, tx.amount, tx.description);
+      const c = counts.get(sig) ?? 0;
+      if (c > 0) {
+        counts.set(sig, c - 1);
+        found++;
+        return true;
+      }
+      return false;
+    });
+    if (found > 0) {
+      setPending((prev) =>
+        prev.map((tx, i) =>
+          marks[i] ? { ...tx, status: "rejected" as const, duplicate: true } : tx
+        )
+      );
+    }
+    setDedupCount(found);
+    setDedupDone(true);
+  }, [existingTx, existingLoading, dedupDone, pending]);
+
   const handleApprove = (id: string) => {
     setPending((prev) =>
       prev.map((tx) => {
         if (tx.id !== id) return tx;
-        rememberDecision(tx.description, { type: tx.type, category: tx.category });
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category: tx.category });
         return { ...tx, status: "approved" as const };
       })
     );
@@ -1022,7 +1926,7 @@ function ImportPreview({
     setPending((prev) =>
       prev.map((tx) => {
         if (tx.id !== id) return tx;
-        rememberDecision(tx.description, { type: tx.type, category });
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category });
         return { ...tx, category, status: "pending" as const };
       })
     );
@@ -1033,14 +1937,30 @@ function ImportPreview({
       prev.map((tx) => {
         if (tx.id !== id) return tx;
         const category = defaultCategoryForType(type, tx.category);
-        rememberDecision(tx.description, { type, category });
+        rememberDecision(tx.description, tx.amount, { type, category });
         return { ...tx, type, category, status: "pending" as const };
+      })
+    );
+  };
+
+  // "Aprovar todas": marca todas as novas (não duplicadas) ainda pendentes como
+  // aprovadas de uma vez — para não teres de tocar em cada uma quando são
+  // centenas ou milhares. Aprende a decisão de cada.
+  const handleApproveAll = () => {
+    setPending((prev) =>
+      prev.map((tx) => {
+        if (tx.duplicate || tx.status === "rejected" || tx.status === "approved") return tx;
+        rememberDecision(tx.description, tx.amount, { type: tx.type, category: tx.category });
+        return { ...tx, status: "approved" as const };
       })
     );
   };
 
   // Guardamos tudo o que não foi rejeitado (as edições sobrepõem-se ao original).
   const toSave = pending.filter((tx) => tx.status !== "rejected");
+  const freshPending = pending.filter(
+    (tx) => !tx.duplicate && tx.status !== "rejected" && tx.status !== "approved"
+  ).length;
 
   const handleSaveToDatabase = async () => {
     setSaving(true);
@@ -1093,6 +2013,21 @@ function ImportPreview({
 
   return (
     <div className="space-y-6">
+      {/* Resumo do corte Mobills (anti-duplicados) */}
+      {mobillsSummary && (
+        <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-blue-800 leading-relaxed">
+              De <strong>{mobillsSummary.total}</strong> linhas do Mobills,{" "}
+              <strong>{mobillsSummary.kept}</strong> entram (as anteriores aos teus extratos);{" "}
+              <strong>{mobillsSummary.dropped}</strong> saltadas por já estarem cobertas pelos
+              extratos.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Summary */}
       <div className="bg-white rounded-2xl border border-gray-100 p-5">
         <div className="flex items-center justify-between mb-4">
@@ -1100,7 +2035,7 @@ function ImportPreview({
             <h3 className="text-sm font-bold text-gray-900">Resumo da importação</h3>
             {detectedFormat && detectedFormat !== "auto" && (
               <span className="text-[10px] font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full uppercase">
-                {detectedFormat === "cpc" ? "CSV (Inglês)" : detectedFormat === "moza" ? "CSV (Português)" : detectedFormat === "standard-bank" ? "Excel" : "App externa"}
+                {detectedFormat === "cpc" ? "CSV (Inglês)" : detectedFormat === "moza" ? "CSV (Português)" : detectedFormat === "standard-bank" ? "Excel" : detectedFormat === "mpesa" ? "PDF (M-Pesa)" : "App externa"}
               </span>
             )}
           </div>
@@ -1275,8 +2210,22 @@ function ImportPreview({
         </div>
       )}
 
+      {/* Duplicados saltados automaticamente (reimportação de dias já lançados) */}
+      {!saved && dedupCount > 0 && (
+        <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-blue-800 leading-relaxed">
+              <strong>{dedupCount}</strong> transaç{dedupCount !== 1 ? "ões já existiam" : "ão já existia"}{" "}
+              e {dedupCount !== 1 ? "foram saltadas" : "foi saltada"} automaticamente (dias que já
+              tinhas lançado). Vês só as <strong>novas</strong> em baixo.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Rever transações — detectar, questionar e aprender */}
-      {!saved && pending.length > 0 && (
+      {!saved && pending.some((tx) => !tx.duplicate) && (
         <div>
           <h3 className="text-sm font-bold text-gray-900 mb-3">Rever transações</h3>
           <PendingReviewList
@@ -1289,30 +2238,46 @@ function ImportPreview({
         </div>
       )}
 
-      {/* Import Button */}
+      {/* Barra de ação fixa (o "elevador"): sempre visível, para importares ou
+          aprovares todas sem teres de scrollar até ao fim — essencial quando são
+          centenas ou milhares de transações. */}
       {saved ? (
         <div className="w-full flex items-center justify-center gap-3 bg-emerald-100 text-emerald-700 font-semibold py-4 rounded-2xl">
           <CheckCircle2 className="w-5 h-5" />
           {toSave.length} transações importadas com sucesso!
         </div>
       ) : (
-        <button
-          className="w-full flex items-center justify-center gap-3 bg-emerald-500 text-white font-semibold py-4 rounded-2xl hover:bg-emerald-600 disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/20"
-          onClick={handleSaveToDatabase}
-          disabled={saving || toSave.length === 0}
-        >
-          {saving ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              A guardar...
-            </>
-          ) : (
-            <>
-              <Check className="w-5 h-5" />
-              Importar {toSave.length} transações
-            </>
+        <div className="sticky bottom-2 z-30 flex items-center gap-2 rounded-2xl bg-white/80 backdrop-blur-sm p-2 shadow-lg ring-1 ring-black/5">
+          {freshPending > 0 && (
+            <button
+              className="flex items-center justify-center gap-2 bg-white text-emerald-700 border border-emerald-200 font-semibold py-4 px-4 rounded-2xl hover:bg-emerald-50 disabled:opacity-50 transition-all flex-shrink-0"
+              onClick={handleApproveAll}
+              disabled={saving}
+              title="Aprovar todas as novas de uma vez"
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              <span className="hidden sm:inline">Aprovar todas ({freshPending})</span>
+              <span className="sm:hidden">Todas ({freshPending})</span>
+            </button>
           )}
-        </button>
+          <button
+            className="flex-1 flex items-center justify-center gap-3 bg-emerald-500 text-white font-semibold py-4 rounded-2xl hover:bg-emerald-600 disabled:opacity-50 transition-all shadow-lg shadow-emerald-500/20"
+            onClick={handleSaveToDatabase}
+            disabled={saving || toSave.length === 0}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                A guardar...
+              </>
+            ) : (
+              <>
+                <Check className="w-5 h-5" />
+                Importar {toSave.length} transações
+              </>
+            )}
+          </button>
+        </div>
       )}
 
       {/* Generate PDF Report Button */}
