@@ -303,9 +303,11 @@ export function parseMpesaPdfItems(items: MpesaTextItem[]): ImportResult {
   }
 
   void firstOpening;
+  // O extrato M-Pesa é cronológico (mais antigo em cima). Quando as datas
+  // empatam (mesmo dia), o fecho é a ÚLTIMA linha (lastBal).
   let closingBalance: number | null = null;
   if (firstBal !== null && lastBal !== null) {
-    closingBalance = firstBalDate >= lastBalDate ? firstBal : lastBal;
+    closingBalance = firstBalDate > lastBalDate ? firstBal : lastBal;
   }
 
   return {

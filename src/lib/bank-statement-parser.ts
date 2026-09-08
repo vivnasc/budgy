@@ -247,8 +247,9 @@ export function parseCPCStatement(csvContent: string): ImportResult {
   let minDate = "";
   let maxDate = "";
   let openingBalance: { amount: number; date: string } | null = null;
-  // Saldo REAL de fecho: a coluna Balance (fields[6]) da linha cronologicamente
-  // mais recente. É a verdade do banco e serve de âncora do saldo.
+  // Saldo REAL de fecho: preferimos a linha explícita "CLOSING BALANCE"; se não
+  // existir, a coluna Balance da linha cronologicamente mais recente.
+  let closingFromRow: number | null = null;
   let firstBal: number | null = null;
   let firstBalDate = "";
   let lastBal: number | null = null;
@@ -280,7 +281,21 @@ export function parseCPCStatement(csvContent: string): ImportResult {
       if (parsed !== 0) openingBalance = { amount: parsed, date: isoDate };
       continue;
     }
-    if (/^CLOSING BALANCE/i.test(line)) continue;
+    if (/^CLOSING BALANCE/i.test(line)) {
+      // O CPC traz o saldo de fecho REAL nesta linha (coluna Balance, idx 6).
+      const cf = parseCSVLine(line);
+      const parsed = (() => {
+        const byIdx = parseCPCAmount(cf[6] ?? "");
+        if (byIdx) return byIdx;
+        for (let j = cf.length - 1; j >= 0; j--) {
+          const n = parseCPCAmount(cf[j] ?? "");
+          if (n) return n;
+        }
+        return 0;
+      })();
+      if (parsed !== 0) closingFromRow = parsed;
+      continue;
+    }
 
     // Parse CSV line (CPC uses comma-separated with possible quoted fields)
     const fields = parseCSVLine(line);
@@ -366,13 +381,15 @@ export function parseCPCStatement(csvContent: string): ImportResult {
     openingBalance.date = minDate;
   }
 
-  // Saldo de fecho real = running balance da linha cronologicamente mais
-  // recente. É a âncora do saldo (ver applyOpeningBalance). Fallback: derivar
-  // do opening + movimentos, se a coluna Balance não existir.
-  let closingBalance: number | null = null;
-  if (firstBal !== null && lastBal !== null) {
-    closingBalance = firstBalDate >= lastBalDate ? firstBal : lastBal;
-  } else if (openingBalance) {
+  // Saldo de fecho real. Prioridade: (1) linha CLOSING BALANCE explícita;
+  // (2) running balance da linha mais recente — quando as datas empatam (extrato
+  // de um só dia), o fecho é a ÚLTIMA linha em ordem de ficheiro (lastBal);
+  // (3) derivar do opening + movimentos.
+  let closingBalance: number | null = closingFromRow;
+  if (closingBalance === null && firstBal !== null && lastBal !== null) {
+    closingBalance = firstBalDate > lastBalDate ? firstBal : lastBal;
+  }
+  if (closingBalance === null && openingBalance) {
     closingBalance = openingBalance.amount + (totalIncome - totalExpenses - totalTransfers);
   }
 

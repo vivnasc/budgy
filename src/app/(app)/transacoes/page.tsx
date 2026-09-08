@@ -147,11 +147,15 @@ export default function TransacoesPage() {
   const grouped = groupByDate(filteredTransactions);
   const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
 
+  // Os "Saldo de Abertura" (Ajuste de Saldo) são calibração de saldo, não
+  // receita/despesa real — não devem inflar os totais.
+  const isAdjustment = (t: { description?: string | null; categories?: { name?: string } | null }) =>
+    t.description === "Saldo de Abertura" || t.categories?.name === "Ajuste de Saldo";
   const totalIncome = filteredTransactions
-    .filter((t) => t.type === "income")
+    .filter((t) => t.type === "income" && !isAdjustment(t))
     .reduce((s, t) => s + t.amount, 0);
   const totalExpense = filteredTransactions
-    .filter((t) => t.type === "expense")
+    .filter((t) => t.type === "expense" && !isAdjustment(t))
     .reduce((s, t) => s + t.amount, 0);
 
   return (
