@@ -480,6 +480,24 @@ function ResetDataSection() {
 
   const [recat, setRecat] = useState<{ running: boolean; updated?: number; total?: number; err?: string }>({ running: false });
   const [statusFix, setStatusFix] = useState<{ running: boolean; pending?: number; completed?: number; err?: string }>({ running: false });
+  const [dedupe, setDedupe] = useState<{ running: boolean; removed?: number; err?: string }>({ running: false });
+
+  const handleRemoveDuplicates = async () => {
+    setDedupe({ running: true });
+    try {
+      const res = await fetch("/api/transactions/remove-duplicates", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setDedupe({ running: false, removed: data.removed });
+        // Recarrega para os saldos e listas reflectirem a limpeza.
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        setDedupe({ running: false, err: data.error || "Erro ao remover duplicados" });
+      }
+    } catch {
+      setDedupe({ running: false, err: "Erro de rede" });
+    }
+  };
 
   const handleReset = async () => {
     setResetting(true);
@@ -538,6 +556,42 @@ function ResetDataSection() {
 
   return (
     <div className="mt-10 pt-6 border-t border-gray-100 space-y-4">
+      {/* Remover duplicados (mantém uma de cada — não apaga dados válidos) */}
+      <div className="bg-emerald-50 rounded-2xl border border-emerald-100 p-4">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-emerald-900">Remover duplicados</h3>
+            <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
+              Limpa transações repetidas de imports anteriores — <strong>mantém uma de cada</strong> e
+              apaga só as cópias (mesma conta, data, valor e descrição). Não apaga dados válidos nem
+              contas, e os saldos são recalculados no fim.
+            </p>
+            {dedupe.removed !== undefined ? (
+              <p className="text-xs text-emerald-700 font-semibold mt-3 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4" />
+                {dedupe.removed === 0
+                  ? "Sem duplicados — está limpo!"
+                  : `${dedupe.removed} duplicados removidos. A recarregar...`}
+              </p>
+            ) : (
+              <button
+                onClick={handleRemoveDuplicates}
+                disabled={dedupe.running}
+                className="mt-3 inline-flex items-center gap-2 text-xs font-semibold bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {dedupe.running ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> A procurar duplicados...</>
+                ) : (
+                  "Remover duplicados"
+                )}
+              </button>
+            )}
+            {dedupe.err && <p className="text-xs text-red-700 mt-2">{dedupe.err}</p>}
+          </div>
+        </div>
+      </div>
+
       {/* Re-categorize existing transactions (no destructive action) */}
       <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4">
         <div className="flex items-start gap-3">
