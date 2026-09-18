@@ -50,6 +50,33 @@ export async function PATCH(
     }
     if (categoryId) allowed.category_id = categoryId;
 
+    // Trocar a CONTA da transação (corrige enganos: lançou no Moza mas era CPC).
+    // Aceita account_id directo ou account_name; validamos que a conta é da
+    // utilizadora antes de gravar.
+    if (typeof body.account_id === "string" && body.account_id.trim()) {
+      const { data: acc } = await supabase
+        .schema("money_schema")
+        .from("accounts")
+        .select("id")
+        .eq("id", body.account_id.trim())
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (!acc) return NextResponse.json({ error: "Conta inválida" }, { status: 400 });
+      allowed.account_id = acc.id;
+    } else if (typeof body.account_name === "string" && body.account_name.trim()) {
+      const { data: accs } = await supabase
+        .schema("money_schema")
+        .from("accounts")
+        .select("id, name")
+        .eq("user_id", user.id);
+      const norm = (s: string) =>
+        s.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[\s\-_.]/g, "");
+      const target = norm(body.account_name);
+      const match = (accs as { id: string; name: string }[] | null)?.find((a) => norm(a.name) === target);
+      if (!match) return NextResponse.json({ error: "Conta não encontrada" }, { status: 400 });
+      allowed.account_id = match.id;
+    }
+
     if (Object.keys(allowed).length === 0) {
       return NextResponse.json({ error: "Sem campos para actualizar" }, { status: 400 });
     }
@@ -65,9 +92,11 @@ export async function PATCH(
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    // Recalcula as contas afectadas — incluindo a NOVA conta se ela mudou.
     const touched = new Set<string>();
     if (before.account_id) touched.add(before.account_id);
     if (before.transfer_to_account_id) touched.add(before.transfer_to_account_id);
+    if (typeof allowed.account_id === "string") touched.add(allowed.account_id);
     await persistAccountBalances(supabase, user.id, Array.from(touched));
 
     return NextResponse.json({ success: true, transaction: data });

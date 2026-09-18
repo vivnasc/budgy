@@ -4,6 +4,7 @@ import { useState } from "react";
 import { X, Trash2, Save, Loader2, AlertCircle, Calendar, Tag, Wallet, Repeat, FileText, Clock, CheckCircle2, XCircle, ChevronDown } from "lucide-react";
 import type { Transaction, TransactionStatus } from "@/lib/supabase/types";
 import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
+import { useAccounts } from "@/hooks/use-supabase-data";
 
 interface TransactionDetailModalProps {
   transaction: Transaction;
@@ -27,6 +28,10 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
   const [isRecurring, setIsRecurring] = useState(transaction.is_recurring ?? false);
   const [status, setStatus] = useState<TransactionStatus>(transaction.status ?? "completed");
   const [showCat, setShowCat] = useState(false);
+  const [accountId, setAccountId] = useState<string>(
+    transaction.account_id ?? transaction.accounts?.id ?? ""
+  );
+  const { data: accounts } = useAccounts();
 
   // Notas guardadas (descrição original do banco) — ficam na coluna `notes`
   // do supabase ou em tags. Aqui mostramos o que estiver disponível.
@@ -71,6 +76,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
           type: transaction.type,
           is_recurring: isRecurring,
           status,
+          account_id: accountId || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -222,9 +228,23 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
             )}
           </Field>
 
-          {/* Account */}
+          {/* Account — editável para corrigir enganos (ex: lançou no Moza mas era CPC) */}
           <Field icon={Wallet} label="Conta">
-            <p className="text-sm text-white">{transaction.accounts?.name || "—"}</p>
+            {mode === "edit" ? (
+              <select
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              >
+                {(accounts ?? []).map((a) => (
+                  <option key={a.id} value={a.id} className="bg-gray-800 text-white">
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="text-sm text-white">{transaction.accounts?.name || "—"}</p>
+            )}
           </Field>
 
           {/* Status (pendente/paga/cancelada) */}
