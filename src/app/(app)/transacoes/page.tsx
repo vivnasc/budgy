@@ -26,6 +26,7 @@ import { AddTransactionModal } from "@/components/add-transaction-modal";
 import { TransactionDetailModal } from "@/components/transaction-detail-modal";
 import { useTransactions, useLatestMonthOffset, useTransactionStats, useAccounts } from "@/hooks/use-supabase-data";
 import type { Transaction } from "@/lib/supabase/types";
+import { isBusinessTagged } from "@/lib/business";
 
 type FilterType = "all" | "income" | "expense" | "transfer";
 
@@ -85,6 +86,7 @@ export default function TransacoesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [scope, setScope] = useState<"all" | "personal" | "business">("all");
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
 
@@ -123,6 +125,12 @@ export default function TransacoesPage() {
       if (selectedAccount && tx.account_id !== selectedAccount) return false;
       // Filtro por categoria (por nome)
       if (selectedCategory && (tx.categories?.name ?? "") !== selectedCategory) return false;
+      // Filtro Pessoal vs Negócio (etiqueta)
+      if (scope !== "all") {
+        const biz = isBusinessTagged(tx.tags);
+        if (scope === "business" && !biz) return false;
+        if (scope === "personal" && biz) return false;
+      }
       // Procura por texto (descrição ou categoria)
       if (q) {
         const hit =
@@ -132,16 +140,17 @@ export default function TransacoesPage() {
       }
       return true;
     });
-  }, [transactions, searchQuery, selectedAccount, selectedCategory]);
+  }, [transactions, searchQuery, selectedAccount, selectedCategory, scope]);
 
   const hasActiveFilters =
-    filter !== "all" || searchQuery.trim() !== "" || selectedAccount !== null || selectedCategory !== null;
+    filter !== "all" || searchQuery.trim() !== "" || selectedAccount !== null || selectedCategory !== null || scope !== "all";
 
   const clearFilters = () => {
     setFilter("all");
     setSearchQuery("");
     setSelectedAccount(null);
     setSelectedCategory(null);
+    setScope("all");
   };
 
   const grouped = groupByDate(filteredTransactions);
@@ -233,6 +242,27 @@ export default function TransacoesPage() {
               }`}
             >
               {Icon && <Icon className="w-3 h-3" />}
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Filtro Pessoal / Negócio */}
+        <div className="flex gap-2 mt-2">
+          {([
+            { key: "all", label: "Tudo" },
+            { key: "personal", label: "Pessoal" },
+            { key: "business", label: "Negócio" },
+          ] as const).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setScope(key)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                scope === key
+                  ? key === "business" ? "bg-indigo-500 text-white" : "bg-emerald-500 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
               {label}
             </button>
           ))}

@@ -5,6 +5,7 @@ import { X, Trash2, Save, Loader2, AlertCircle, Calendar, Tag, Wallet, Repeat, F
 import type { Transaction, TransactionStatus } from "@/lib/supabase/types";
 import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
 import { useAccounts } from "@/hooks/use-supabase-data";
+import { isBusinessTagged, withBusinessTag } from "@/lib/business";
 
 interface TransactionDetailModalProps {
   transaction: Transaction;
@@ -31,6 +32,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
   const [accountId, setAccountId] = useState<string>(
     transaction.account_id ?? transaction.accounts?.id ?? ""
   );
+  const [isBusiness, setIsBusiness] = useState<boolean>(isBusinessTagged(transaction.tags));
   const { data: accounts } = useAccounts();
 
   // Notas guardadas (descrição original do banco) — ficam na coluna `notes`
@@ -77,6 +79,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
           is_recurring: isRecurring,
           status,
           account_id: accountId || undefined,
+          tags: withBusinessTag(transaction.tags, isBusiness),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -301,6 +304,27 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
               </label>
             ) : (
               <p className="text-sm text-white">{transaction.is_recurring ? "Sim — repete-se mensalmente" : "Não"}</p>
+            )}
+          </Field>
+
+          {/* Negócio vs Pessoal */}
+          <Field icon={Tag} label="Negócio">
+            {mode === "edit" ? (
+              <label className="flex items-center gap-2 text-sm text-white cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isBusiness}
+                  onChange={(e) => setIsBusiness(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-indigo-500/50"
+                />
+                É um custo do negócio (anúncios, ferramentas, infraestrutura)
+              </label>
+            ) : (
+              <p className="text-sm text-white">
+                {isBusinessTagged(transaction.tags)
+                  ? <span className="text-indigo-300 font-medium">Negócio</span>
+                  : "Pessoal"}
+              </p>
             )}
           </Field>
 
