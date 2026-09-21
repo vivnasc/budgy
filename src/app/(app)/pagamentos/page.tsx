@@ -46,6 +46,7 @@ export default function PagamentosPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editing, setEditing] = useState<RecurringPayment | null>(null);
   const [adding, setAdding] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Ciclo actual (mês de salário — começa no dia configurado, ex: 20).
   const startDay = getCycleStartDay();
@@ -170,7 +171,20 @@ export default function PagamentosPage() {
               Esta funcionalidade precisa de uma tabela nova na tua base de dados. Cola o SQL abaixo no
               <strong> SQL Editor do Supabase</strong> e corre — depois recarrega esta página.
             </p>
-            <pre className="text-[10px] bg-gray-900 text-gray-100 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap">{SETUP_SQL}</pre>
+            <div className="relative">
+              <pre className="text-[10px] bg-gray-900 text-gray-100 rounded-xl p-3 pt-9 overflow-x-auto whitespace-pre-wrap select-all">{SETUP_SQL}</pre>
+              <button
+                onClick={async () => {
+                  try { await navigator.clipboard.writeText(SETUP_SQL); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* ignore */ }
+                }}
+                className="absolute top-2 right-2 text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white px-2.5 py-1 rounded-lg"
+              >
+                {copied ? "Copiado ✓" : "Copiar SQL"}
+              </button>
+            </div>
+            <p className="text-[11px] text-amber-600 mt-2">
+              Copia só com o botão acima. Não incluas nenhum texto desta página no SQL.
+            </p>
             <button onClick={load} className="mt-3 text-xs font-semibold bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">
               Já corri — recarregar
             </button>
