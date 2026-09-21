@@ -17,6 +17,7 @@ import {
   MessageSquareText,
   Sparkles,
   HandHeart,
+  Banknote,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -57,6 +58,7 @@ const MORE_MENU_ITEMS = [
   { label: "Análise", icon: Sparkles, href: "/analise", color: "bg-emerald-500" },
   { label: "Importar", icon: MessageSquareText, href: "/importar", color: "bg-emerald-600" },
   { label: "Metas", icon: Target, href: "/metas", color: "bg-emerald-500" },
+  { label: "Pagamentos", icon: Banknote, href: "/pagamentos", color: "bg-indigo-500" },
   { label: "Contas", icon: Wallet, href: "/contas", color: "bg-blue-500" },
   { label: "Xitique", icon: Users, href: "/xitique", color: "bg-amber-500" },
   { label: "Dívidas", icon: Heart, href: "/dividas", color: "bg-red-500" },
