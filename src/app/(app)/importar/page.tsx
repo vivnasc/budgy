@@ -39,8 +39,7 @@ import { generateImportPDF } from "@/lib/import-pdf";
 import { SUPPORTED_BANKS } from "@/lib/sms-parser";
 import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
 import { SUPPORTED_BANK_FORMATS, type BankFormat } from "@/lib/bank-statement-parser";
-import { applyLearnedRules, rememberDecision } from "@/lib/learned-rules";
-import { withBusinessTag, isBusinessTagged, isLikelyBusiness } from "@/lib/business";import {
+import { applyLearnedRules, rememberDecision } from "@/lib/learned-rules";import {
   applyMobillsMappingAndCutoff,
   rebuildMobillsResult,
   getMobillsAccountNames,
@@ -482,22 +481,6 @@ function ResetDataSection() {
   const [recat, setRecat] = useState<{ running: boolean; updated?: number; total?: number; err?: string }>({ running: false });
   const [statusFix, setStatusFix] = useState<{ running: boolean; pending?: number; completed?: number; err?: string }>({ running: false });
   const [dedupe, setDedupe] = useState<{ running: boolean; removed?: number; err?: string }>({ running: false });
-  const [bizTag, setBizTag] = useState<{ running: boolean; tagged?: number; err?: string }>({ running: false });
-
-  const handleTagBusiness = async () => {
-    setBizTag({ running: true });
-    try {
-      const res = await fetch("/api/transactions/tag-business", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
-        setBizTag({ running: false, tagged: data.tagged });
-      } else {
-        setBizTag({ running: false, err: data.error || "Erro ao marcar negócio" });
-      }
-    } catch {
-      setBizTag({ running: false, err: "Erro de rede" });
-    }
-  };
 
   const handleRemoveDuplicates = async () => {
     setDedupe({ running: true });
@@ -614,31 +597,13 @@ function ResetDataSection() {
         <div className="flex items-start gap-3">
           <Tag className="w-5 h-5 text-indigo-600 mt-0.5 flex-shrink-0" />
           <div className="flex-1">
-            <h3 className="text-sm font-bold text-indigo-900">Marcar custos do negócio</h3>
+            <h3 className="text-sm font-bold text-indigo-900">Custos do negócio</h3>
             <p className="text-xs text-indigo-700 mt-1 leading-relaxed">
-              Marca com a etiqueta <strong>Negócio</strong> os teus fornecedores conhecidos (anúncios/Meta,
-              Leonardo.AI, ElevenLabs, InVideo, Hotmart, Anthropic, Starlink...). Assim vês o negócio à
-              parte do pessoal. Não apaga nem muda mais nada — só acrescenta a etiqueta.
+              És <strong>tu</strong> que decides o que é do negócio. Marca cada transação em{" "}
+              <strong>Transacções</strong> (abre a transação → Editar → liga &quot;Negócio&quot;), ou
+              filtra/pesquisa um grupo (ex: os teus anúncios) e marca todas de uma vez com o botão
+              <strong> &quot;Marcar como Negócio&quot;</strong>. A app não adivinha.
             </p>
-            {bizTag.tagged !== undefined ? (
-              <p className="text-xs text-emerald-700 font-semibold mt-3 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" />
-                {bizTag.tagged === 0 ? "Nada novo para marcar." : `${bizTag.tagged} transações marcadas como Negócio.`}
-              </p>
-            ) : (
-              <button
-                onClick={handleTagBusiness}
-                disabled={bizTag.running}
-                className="mt-3 inline-flex items-center gap-2 text-xs font-semibold bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {bizTag.running ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> A marcar...</>
-                ) : (
-                  "Marcar fornecedores do negócio"
-                )}
-              </button>
-            )}
-            {bizTag.err && <p className="text-xs text-red-700 mt-2">{bizTag.err}</p>}
           </div>
         </div>
       </div>
@@ -2084,10 +2049,7 @@ function ImportPreview({
           account: tx.accountHint,
           transfer_to_account: orig?.transferToAccount,
           category_name: tx.category,
-          tags: withBusinessTag(
-            orig?.tags,
-            isBusinessTagged(orig?.tags) || isLikelyBusiness(tx.description) || isLikelyBusiness(orig?.notes)
-          ),
+          tags: orig?.tags,
           status: orig?.status,
         };
       });

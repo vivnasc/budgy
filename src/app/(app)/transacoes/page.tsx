@@ -167,6 +167,25 @@ export default function TransacoesPage() {
     .filter((t) => t.type === "expense" && !isAdjustment(t))
     .reduce((s, t) => s + t.amount, 0);
 
+  // Marcar/desmarcar em GRUPO as transações que a utilizadora filtrou como
+  // Negócio — ela escolhe o conjunto (filtro/pesquisa), a app não adivinha.
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const bulkTagBusiness = async (on: boolean) => {
+    const ids = filteredTransactions.map((t) => t.id);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    try {
+      const res = await fetch("/api/transactions/tag-business", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, on }),
+      });
+      if (res.ok) refetch();
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen pb-4">
       {/* Header */}
@@ -267,6 +286,27 @@ export default function TransacoesPage() {
             </button>
           ))}
         </div>
+
+        {/* Marcar em grupo as transações filtradas como Negócio (tu escolhes o conjunto) */}
+        {hasActiveFilters && filteredTransactions.length > 0 && (
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            <span className="text-[11px] text-gray-400">{filteredTransactions.length} filtradas:</span>
+            <button
+              onClick={() => bulkTagBusiness(true)}
+              disabled={bulkBusy}
+              className="text-[11px] font-semibold bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg hover:bg-indigo-200 disabled:opacity-50"
+            >
+              Marcar como Negócio
+            </button>
+            <button
+              onClick={() => bulkTagBusiness(false)}
+              disabled={bulkBusy}
+              className="text-[11px] font-semibold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+            >
+              Tirar de Negócio
+            </button>
+          </div>
+        )}
 
         {/* Filtro por conta */}
         {accounts && accounts.length > 0 && (
