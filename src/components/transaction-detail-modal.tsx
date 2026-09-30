@@ -33,7 +33,33 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
     transaction.account_id ?? transaction.accounts?.id ?? ""
   );
   const [isBusiness, setIsBusiness] = useState<boolean>(isBusinessTagged(transaction.tags));
+  const [bizSaving, setBizSaving] = useState(false);
   const { data: accounts } = useAccounts();
+
+  // Marcar Negócio/Pessoal com um toque, sem entrar em modo de edição.
+  const toggleBusiness = async (on: boolean) => {
+    if (on === isBusiness || bizSaving) return;
+    setBizSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/transactions/${transaction.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tags: withBusinessTag(transaction.tags, on) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        setErr(data.error || "Erro ao guardar");
+      } else {
+        setIsBusiness(on);
+        onChanged?.();
+      }
+    } catch {
+      setErr("Erro de rede");
+    } finally {
+      setBizSaving(false);
+    }
+  };
 
   // Notas guardadas (descrição original do banco) — ficam na coluna `notes`
   // do supabase ou em tags. Aqui mostramos o que estiver disponível.
@@ -307,8 +333,8 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
             )}
           </Field>
 
-          {/* Negócio vs Pessoal */}
-          <Field icon={Tag} label="Negócio">
+          {/* Negócio vs Pessoal — um toque, sem entrar em Editar */}
+          <Field icon={Tag} label="Negócio ou Pessoal">
             {mode === "edit" ? (
               <label className="flex items-center gap-2 text-sm text-white cursor-pointer">
                 <input
@@ -320,11 +346,29 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
                 É um custo do negócio (anúncios, ferramentas, infraestrutura)
               </label>
             ) : (
-              <p className="text-sm text-white">
-                {isBusinessTagged(transaction.tags)
-                  ? <span className="text-indigo-300 font-medium">Negócio</span>
-                  : "Pessoal"}
-              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleBusiness(false)}
+                  disabled={bizSaving}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+                    !isBusiness ? "bg-emerald-500 text-white" : "bg-white/5 text-gray-300 hover:bg-white/10"
+                  }`}
+                >
+                  Pessoal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleBusiness(true)}
+                  disabled={bizSaving}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
+                    isBusiness ? "bg-indigo-500 text-white" : "bg-white/5 text-gray-300 hover:bg-white/10"
+                  }`}
+                >
+                  Negócio
+                </button>
+                {bizSaving && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+              </div>
             )}
           </Field>
 
