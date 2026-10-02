@@ -39,7 +39,9 @@ import { generateImportPDF } from "@/lib/import-pdf";
 import { SUPPORTED_BANKS } from "@/lib/sms-parser";
 import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
 import { SUPPORTED_BANK_FORMATS, type BankFormat } from "@/lib/bank-statement-parser";
-import { applyLearnedRules, rememberDecision } from "@/lib/learned-rules";import {
+import { applyLearnedRules, rememberDecision } from "@/lib/learned-rules";
+import { withBusinessTag, isBusinessTagged } from "@/lib/business";
+import { getLearnedBusiness } from "@/lib/learned-business";import {
   applyMobillsMappingAndCutoff,
   rebuildMobillsResult,
   getMobillsAccountNames,
@@ -2049,7 +2051,10 @@ function ImportPreview({
           account: tx.accountHint,
           transfer_to_account: orig?.transferToAccount,
           category_name: tx.category,
-          tags: orig?.tags,
+          tags: withBusinessTag(
+            orig?.tags,
+            isBusinessTagged(orig?.tags) || getLearnedBusiness(tx.description) === true
+          ),
           status: orig?.status,
         };
       });

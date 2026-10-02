@@ -6,6 +6,7 @@ import type { Transaction, TransactionStatus } from "@/lib/supabase/types";
 import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
 import { useAccounts } from "@/hooks/use-supabase-data";
 import { isBusinessTagged, withBusinessTag } from "@/lib/business";
+import { rememberBusinessDecision } from "@/lib/learned-business";
 
 interface TransactionDetailModalProps {
   transaction: Transaction;
@@ -52,6 +53,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
         setErr(data.error || "Erro ao guardar");
       } else {
         setIsBusiness(on);
+        rememberBusinessDecision(transaction.description ?? "", on);
         onChanged?.();
       }
     } catch {
@@ -112,6 +114,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
       if (!res.ok || !data.success) {
         setErr(data.error || "Erro ao guardar");
       } else {
+        rememberBusinessDecision(description || transaction.description || "", isBusiness);
         onChanged?.();
         onClose();
       }

@@ -27,6 +27,7 @@ import { TransactionDetailModal } from "@/components/transaction-detail-modal";
 import { useTransactions, useLatestMonthOffset, useTransactionStats, useAccounts } from "@/hooks/use-supabase-data";
 import type { Transaction } from "@/lib/supabase/types";
 import { isBusinessTagged } from "@/lib/business";
+import { rememberBusinessDecision } from "@/lib/learned-business";
 
 type FilterType = "all" | "income" | "expense" | "transfer";
 
@@ -181,6 +182,10 @@ export default function TransacoesPage() {
         body: JSON.stringify({ ids, on }),
       });
       if (res.ok) refetch();
+      // Aprende a decisão por fornecedor (para futuros imports virem marcados).
+      for (const t of filteredTransactions) {
+        rememberBusinessDecision(t.description ?? "", on);
+      }
     } finally {
       setBulkBusy(false);
     }
