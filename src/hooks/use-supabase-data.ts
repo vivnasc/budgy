@@ -46,6 +46,19 @@ function useSupabase() {
 
 // ─── Generic data hook ──────────────────────────────────────────────────────
 
+/**
+ * Sinal global de "dados mudaram". Qualquer escrita (nova transação,
+ * transferência, acerto de saldo...) dispara isto e TODOS os hooks activos
+ * recarregam — assim os saldos nunca ficam presos no ecrã, mesmo quando a
+ * alteração veio de outra página (ex: o botão "+ Nova transacção").
+ */
+export const DATA_CHANGED_EVENT = "budgy:data-changed";
+export function notifyDataChanged(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(DATA_CHANGED_EVENT));
+  }
+}
+
 function useSupabaseQuery<T>(
   fetcher: (userId: string) => Promise<{ data: T | null; error: unknown }>,
   deps: unknown[] = []
@@ -57,6 +70,19 @@ function useSupabaseQuery<T>(
   const [trigger, setTrigger] = useState(0);
 
   const refetch = useCallback(() => setTrigger((t) => t + 1), []);
+
+  // Recarrega automaticamente quando qualquer parte da app sinaliza mudança,
+  // e também ao voltar à janela — nada de saldos presos.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onChanged = () => setTrigger((t) => t + 1);
+    window.addEventListener(DATA_CHANGED_EVENT, onChanged);
+    window.addEventListener("focus", onChanged);
+    return () => {
+      window.removeEventListener(DATA_CHANGED_EVENT, onChanged);
+      window.removeEventListener("focus", onChanged);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) {

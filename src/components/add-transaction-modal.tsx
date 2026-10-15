@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useAccounts } from "@/hooks/use-supabase-data";
+import { useAccounts, notifyDataChanged } from "@/hooks/use-supabase-data";
 import type { Account, AccountType } from "@/lib/supabase/types";
 import {
   X,
@@ -605,6 +605,7 @@ export function AddTransactionModal({ onClose, onSaved }: AddTransactionModalPro
 
                 const data = await response.json();
                 if (response.ok && data.success) {
+                  notifyDataChanged();
                   onSaved?.();
                   handleClose();
                 } else {
