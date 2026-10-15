@@ -4,7 +4,7 @@ import { useState } from "react";
 import { X, Trash2, Save, Loader2, AlertCircle, Calendar, Tag, Wallet, Repeat, FileText, Clock, CheckCircle2, XCircle, ChevronDown } from "lucide-react";
 import type { Transaction, TransactionStatus } from "@/lib/supabase/types";
 import { BUDGY_CATEGORIES } from "@/lib/mobills-import";
-import { useAccounts } from "@/hooks/use-supabase-data";
+import { useAccounts, notifyDataChanged } from "@/hooks/use-supabase-data";
 import { isBusinessTagged, withBusinessTag } from "@/lib/business";
 import { rememberBusinessDecision } from "@/lib/learned-business";
 
@@ -54,6 +54,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
       } else {
         setIsBusiness(on);
         rememberBusinessDecision(transaction.description ?? "", on);
+        notifyDataChanged();
         onChanged?.();
       }
     } catch {
@@ -115,6 +116,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
         setErr(data.error || "Erro ao guardar");
       } else {
         rememberBusinessDecision(description || transaction.description || "", isBusiness);
+        notifyDataChanged();
         onChanged?.();
         onClose();
       }
@@ -136,6 +138,7 @@ export function TransactionDetailModal({ transaction, onClose, onChanged }: Tran
         setDeleting(false);
         return;
       }
+      notifyDataChanged();
       onChanged?.();
       onClose();
     } catch {

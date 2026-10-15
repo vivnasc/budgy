@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, Save, Loader2, AlertCircle, Wallet } from "lucide-react";
 import type { Account } from "@/lib/supabase/types";
+import { notifyDataChanged } from "@/hooks/use-supabase-data";
 
 /**
  * Parses a Mozambican-formatted money string into a number.
@@ -92,6 +93,7 @@ export function OpeningBalanceModal({ account, onClose, onSaved }: Props) {
       // visualmente que o valor parsed bate com o que ela escreveu.
       setSavedBalance(typeof data.balance === "number" ? data.balance : num);
       setSaving(false);
+      notifyDataChanged();
       onSaved?.();
     } catch {
       setErr("Erro de rede");
