@@ -101,8 +101,11 @@ export default function TransacoesPage() {
   const effectiveOffset = monthOffset ?? 0;
   const { from, to, label: currentMonth } = useMemo(() => getMonthDates(effectiveOffset), [effectiveOffset]);
   const typeFilter = filter === "all" ? undefined : filter;
+  // Ao PROCURAR, varre o histórico TODO (não só o mês atual) — assim encontra
+  // qualquer despesa, mesmo de meses anteriores (ex: "futebol").
+  const searchingAll = searchQuery.trim().length > 0;
   const { data: transactions, loading, error, refetch } = useTransactions(
-    viewAll
+    viewAll || searchingAll
       ? { type: typeFilter, limit: 5000 }
       : { type: typeFilter, from, to, limit: 1000 }
   );
